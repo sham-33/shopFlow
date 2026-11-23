@@ -29,13 +29,25 @@
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
 
-    "types": ["vitest/globals", "node"]
+    "types": ["vitest/globals", "node"],
+    "paths": {
+      "@app/common": ["./libs/common/src/index.ts"],
+      "@app/common/*": ["./libs/common/src/*"]
+    }
   },
   "files": [],
   "references": [
-    { "path": "./apps/order-service/tsconfig.app.json" },
-    { "path": "./apps/inventory-service/tsconfig.app.json" },
-    { "path": "./apps/payment-service/tsconfig.app.json" },
-    { "path": "./tsconfig.spec.json" }
+    {
+      "path": "./apps/order-service/tsconfig.app.json"
+    },
+    {
+      "path": "./apps/inventory-service/tsconfig.app.json"
+    },
+    {
+      "path": "./apps/payment-service/tsconfig.app.json"
+    },
+    {
+      "path": "./tsconfig.spec.json"
+    }
   ]
 }

@@ -772,7 +772,7 @@ Goal: one service with clean REST APIs, running in Docker.
 
 - [x] Create the Nest monorepo, add ESLint, Prettier, Husky pre-commit hook, and strict `tsconfig`
 - [x] Write `docker-compose.yml` with Postgres, Kafka (KRaft), `kafka-init` and AKHQ
-- [ ] Build `libs/common`: `AllExceptionsFilter`, `DomainException`, global `ValidationPipe`, correlation ID middleware, pino logger, pagination DTO
+- [x] Build `libs/common`: `AllExceptionsFilter`, `DomainException`, global `ValidationPipe`, correlation ID middleware, pino logger, pagination DTO
 - [ ] Inventory Service: `products`, `stock` entities and the first migration
 - [ ] Product APIs (create, list, get, update, restock) with DTOs, mapper and repository interface
 - [ ] Swagger at `/docs` and health checks

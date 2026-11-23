@@ -1,4 +1,7 @@
+import { CommonModule } from '@app/common';
 import { Module } from '@nestjs/common';
 
-@Module({})
+@Module({
+  imports: [CommonModule.forRoot({ serviceName: 'order-service' })],
+})
 export class AppModule {}
