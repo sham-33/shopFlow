@@ -352,20 +352,19 @@ shopflow/
 │   │   ├── src/
 │   │   │   ├── main.ts
 │   │   │   ├── app.module.ts
-│   │   │   ├── orders/
-│   │   │   │   ├── orders.controller.ts        # HTTP only
-│   │   │   │   ├── orders.service.ts           # business rules
-│   │   │   │   ├── order.repository.ts         # interface + TypeORM class
-│   │   │   │   ├── entities/                   # order.entity.ts, order-item.entity.ts
-│   │   │   │   ├── dto/                        # create-order.dto.ts, order-response.dto.ts, list-orders.query.ts
-│   │   │   │   ├── mappers/order.mapper.ts     # entity <-> DTO
-│   │   │   │   ├── domain/order-state-machine.ts
-│   │   │   │   └── exceptions/                 # invalid-order-state.exception.ts ...
-│   │   │   ├── discounts/                      # Strategy pattern
-│   │   │   ├── catalog/                        # local product copy
+│   │   │   ├── config/                         # database.config.ts, data-source.ts (migration CLI)
+│   │   │   ├── controllers/                    # orders.controller.ts, coupons.controller.ts: HTTP only
+│   │   │   ├── services/                       # orders.service.ts, catalog.service.ts: business rules
+│   │   │   ├── repository/                     # order.repository.ts: interface + TypeORM class
+│   │   │   ├── entities/                       # order.entity.ts, order-item.entity.ts, product-catalog.entity.ts
+│   │   │   ├── dto/                            # create-order.dto.ts, order-response.dto.ts, list-orders.query.ts
+│   │   │   ├── mappers/                        # order.mapper.ts: entity <-> DTO
+│   │   │   ├── domain/                         # order-state-machine.ts, discount strategies (Strategy pattern)
+│   │   │   ├── exceptions/                     # invalid-order-state.exception.ts ...
 │   │   │   ├── messaging/handlers/             # one class per incoming event
-│   │   │   └── database/migrations/
-│   │   └── test/                               # integration tests
+│   │   │   ├── modules/                        # database.module.ts, orders.module.ts ...
+│   │   │   └── migrations/
+│   │   └── test/                               # mirrors src/: unit (*.spec.ts) and integration (*.int-spec.ts)
 │   ├── inventory-service/                      # same layout
 │   └── payment-service/                        # same layout
 ├── libs/
@@ -773,7 +772,7 @@ Goal: one service with clean REST APIs, running in Docker.
 - [x] Create the Nest monorepo, add ESLint, Prettier, Husky pre-commit hook, and strict `tsconfig`
 - [x] Write `docker-compose.yml` with Postgres, Kafka (KRaft), `kafka-init` and AKHQ
 - [x] Build `libs/common`: `AllExceptionsFilter`, `DomainException`, global `ValidationPipe`, correlation ID middleware, pino logger, pagination DTO
-- [ ] Inventory Service: `products`, `stock` entities and the first migration
+- [x] Inventory Service: `products`, `stock` entities and the first migration
 - [ ] Product APIs (create, list, get, update, restock) with DTOs, mapper and repository interface
 - [ ] Swagger at `/docs` and health checks
 - [ ] Unit tests for the product service and the exception filter

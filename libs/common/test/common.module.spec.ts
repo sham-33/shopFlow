@@ -20,15 +20,15 @@ import {
 import { Logger } from 'nestjs-pino';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
-import { CommonModule } from './common.module.js';
-import { getCorrelationId } from './correlation/correlation-id.js';
-import type { ErrorResponseBody } from './exceptions/all-exceptions.filter.js';
+import { CommonModule } from '../src/common.module.js';
+import { getCorrelationId } from '../src/correlation/correlation-id.js';
+import type { ErrorResponseBody } from '../src/exceptions/all-exceptions.filter.js';
 import {
   type DomainErrorKind,
   DomainException,
-} from './exceptions/domain.exception.js';
-import type { FieldError } from './exceptions/request-validation.exception.js';
-import { PaginationQueryDto } from './pagination/pagination.js';
+} from '../src/exceptions/domain.exception.js';
+import type { FieldError } from '../src/exceptions/request-validation.exception.js';
+import { PaginationQueryDto } from '../src/pagination/pagination.js';
 
 class ItemDto {
   @IsInt()

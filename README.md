@@ -12,6 +12,7 @@ An event-driven e-commerce backend: three NestJS services (Order, Inventory, Pay
 ```bash
 npm install          # also installs the Git pre-commit hook
 npm run infra:up     # Postgres, Kafka, topic creation, AKHQ
+npm run migration:run:inventory
 npm run start:dev    # inventory-service in watch mode
 ```
 
@@ -32,6 +33,20 @@ Copy `.env.example` to `.env` to change ports or credentials.
 
 Topics are created by the `kafka-init` container from [docker/kafka/create-topics.sh](docker/kafka/create-topics.sh). Auto-creation is turned off in the broker, so add new topics to that script. The databases are created by [docker/postgres/init](docker/postgres/init) on the first start only; run `docker compose down -v` to wipe all data and start fresh.
 
+## Database migrations
+
+The schema changes only through TypeORM migrations; `synchronize` is off. Each service's migrations live in `apps/<service>/src/migrations/`.
+
+```bash
+npm run migration:run:inventory       # apply pending migrations
+npm run migration:revert:inventory    # undo the last one
+
+# after changing an entity, generate a migration from the difference:
+npm run migration:generate:inventory -- apps/inventory-service/src/migrations/AddSomething
+```
+
+Services connect with `TYPEORM_HOST`, `TYPEORM_PORT`, `TYPEORM_USERNAME`, `TYPEORM_PASSWORD` and `TYPEORM_DATABASE`. Outside production each one defaults to the local Docker Postgres; in production the service refuses to start if any is missing.
+
 ## Scripts
 
 | Script               | What it does                               |
@@ -45,6 +60,27 @@ Topics are created by the `kafka-init` container from [docker/kafka/create-topic
 | `npm run infra:down` | Stop the Docker stack (data is kept)       |
 
 The pre-commit hook runs ESLint and Prettier on staged files, then `typecheck`.
+
+## Project layout
+
+Each app is organised by layer, and its tests live in a `test/` folder that mirrors `src/`:
+
+```
+apps/<service>/
+├── src/
+│   ├── main.ts, app.module.ts
+│   ├── config/        database settings; data-source.ts for the migration CLI
+│   ├── controllers/   HTTP only
+│   ├── services/      business rules
+│   ├── repository/    database access behind an interface
+│   ├── entities/      TypeORM tables
+│   ├── dto/           request and response shapes
+│   ├── modules/       database.module.ts and one module per feature
+│   └── migrations/
+└── test/              same folders as src/, e.g. test/services/products.service.spec.ts
+```
+
+Code shared by every service lives in `libs/common` (imported as `@app/common`), with its tests in `libs/common/test/`.
 
 ## Stack notes
 
