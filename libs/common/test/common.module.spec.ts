@@ -1,5 +1,6 @@
 import { Body, Controller, Get, type INestApplication, Param, Post, Query } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { ServiceUnavailableException } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import { IsArray, IsInt, IsString, Length, Min, ValidateNested } from 'class-validator';
 import { Logger } from 'nestjs-pino';
@@ -11,6 +12,7 @@ import type { ErrorResponseBody } from '../src/exceptions/all-exceptions.filter.
 import { type DomainErrorKind, DomainException } from '../src/exceptions/domain.exception.js';
 import type { FieldError } from '../src/exceptions/request-validation.exception.js';
 import { PaginationQueryDto } from '../src/pagination/pagination.js';
+import { ParseIdPipe } from '../src/validation/parse-id.pipe.js';
 
 class ItemDto {
   @IsInt()
@@ -64,6 +66,20 @@ class ThingsController {
   public duplicate(): never {
     // What TypeORM's QueryFailedError looks like for a Postgres unique violation.
     throw Object.assign(new Error('duplicate key value'), { code: '23505' });
+  }
+
+  @Get('by-id/:id')
+  public byId(@Param('id', ParseIdPipe) id: string): { id: string } {
+    return { id };
+  }
+
+  @Get('unavailable')
+  public unavailable(): never {
+    // What Terminus throws when a readiness check fails.
+    throw new ServiceUnavailableException({
+      status: 'error',
+      error: { database: { status: 'down' } },
+    });
   }
 
   @Get('crash')
@@ -260,6 +276,36 @@ describe('CommonModule', () => {
         statusCode: 409,
         code: 'UNIQUE_VIOLATION',
         error: 'Conflict',
+      });
+    });
+
+    it('accepts a UUID path parameter', async () => {
+      const id = '33444446-505d-4aaf-b42a-5cbc575a9783';
+
+      await request(app.getHttpServer()).get(`/things/by-id/${id}`).expect(200, { id });
+    });
+
+    it('rejects a path parameter that is not a UUID with INVALID_ID', async () => {
+      const res = await request(app.getHttpServer()).get('/things/by-id/not-a-uuid').expect(400);
+
+      expect(res.body).toMatchObject({
+        statusCode: 400,
+        code: 'INVALID_ID',
+        error: 'Bad Request',
+        message: 'The ID must be a valid UUID',
+        details: { parameter: 'id' },
+      });
+    });
+
+    it('passes a non-standard error body, such as a failed health check, on as details', async () => {
+      const res = await request(app.getHttpServer()).get('/things/unavailable').expect(503);
+
+      expect(res.body).toMatchObject({
+        statusCode: 503,
+        code: 'SERVICE_UNAVAILABLE',
+        error: 'Service Unavailable',
+        message: 'Service Unavailable',
+        details: { status: 'error', error: { database: { status: 'down' } } },
       });
     });
 

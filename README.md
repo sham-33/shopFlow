@@ -53,6 +53,17 @@ curl -X POST localhost:3002/api/v1/products \
 
 Errors always come back in the same shape: `statusCode`, `code` (a stable code such as `DUPLICATE_SKU`), `error` (the HTTP status text), `message`, `details` (for example the invalid fields), `path`, `timestamp` and `correlationId`. The code is also sent in an `X-Error-Code` header. Every code a service can return is listed in its `src/constants/errors.ts`.
 
+## API docs and health checks
+
+| What         | Where                             | Notes                                                                  |
+| ------------ | --------------------------------- | ---------------------------------------------------------------------- |
+| Swagger UI   | http://localhost:3002/docs        | Try every endpoint in the browser; error codes are listed per endpoint |
+| OpenAPI JSON | http://localhost:3002/docs-json   | Import into Postman: File → Import → paste the URL                     |
+| Liveness     | `GET localhost:3002/health/live`  | 200 while the process runs                                             |
+| Readiness    | `GET localhost:3002/health/ready` | 200 when the database answers, 503 when it does not                    |
+
+Swagger is on outside production. Set `SWAGGER_ENABLED=true` or `false` to override that.
+
 ## Database migrations
 
 The schema changes only through TypeORM migrations; `synchronize` is off. Each service's migrations live in `apps/<service>/src/migrations/`.

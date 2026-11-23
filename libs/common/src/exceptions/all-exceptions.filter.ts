@@ -97,6 +97,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         // Nest's own errors (unknown route, bad UUID, …) use the status name as their code.
         code: HttpStatus[statusCode] ?? 'HTTP_ERROR',
         message: messageOf(exception),
+        details: detailsOf(exception),
       };
     }
 
@@ -132,7 +133,20 @@ function messageOf(exception: HttpException): string {
       return message.join('; ');
     }
   }
-  return exception.message;
+  return STATUS_CODES[exception.getStatus()] ?? exception.message;
+}
+
+/**
+ * Nest's own exceptions carry `{ statusCode, message, error }`, which the body
+ * already covers. Any other object (for example Terminus's result of a failed
+ * health check) is passed on as `details`.
+ */
+function detailsOf(exception: HttpException): Record<string, unknown> | undefined {
+  const response = exception.getResponse();
+  if (typeof response === 'string' || 'message' in response) {
+    return undefined;
+  }
+  return response as Record<string, unknown>;
 }
 
 /**

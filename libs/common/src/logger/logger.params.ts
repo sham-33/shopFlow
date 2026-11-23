@@ -26,6 +26,8 @@ export function createLoggerParams(serviceName: string): Params {
       quietReqLogger: true,
       customAttributeKeys: { reqId: 'correlationId' },
       customLogLevel: levelForResponse,
+      // Kubernetes probes hit these every few seconds; logging them is noise.
+      autoLogging: { ignore: (req) => req.url?.startsWith('/health/') ?? false },
       redact: ['req.headers.authorization', 'req.headers.cookie'],
       transport: pretty ? { target: 'pino-pretty', options: { singleLine: true } } : undefined,
     },

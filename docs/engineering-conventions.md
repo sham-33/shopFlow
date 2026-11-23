@@ -54,7 +54,7 @@ Code used by one service lives in that service. Code that two or more services n
 ## Controllers
 
 - Version every controller: `@Controller({ path: 'products', version: '1' })`. With `setupApp()` this serves `/api/v1/products`.
-- Validate path IDs with `ParseUUIDPipe`.
+- Validate path IDs with `ParseIdPipe` from `@app/common`. A bad ID fails with the catalog code `INVALID_ID`. Do not use Nest's `ParseUUIDPipe`.
 - Read the DTO, call one service method, map the result with a mapper, return a response DTO. No rules, no queries.
 - Never return a TypeORM entity. Always map it to a response DTO.
 - Set `@HttpCode(HttpStatus.OK)` on POST actions that do not create anything (for example `restock`).
@@ -74,15 +74,15 @@ Code used by one service lives in that service. Code that two or more services n
 
 Every error code a client can receive is listed once:
 
-- `COMMON_ERRORS` in `libs/common` (`VALIDATION_FAILED`, `UNIQUE_VIOLATION`, `INTERNAL_ERROR`).
+- `COMMON_ERRORS` in `libs/common` (`VALIDATION_FAILED`, `INVALID_ID`, `UNIQUE_VIOLATION`, `SERVICE_UNAVAILABLE`, `INTERNAL_ERROR`).
 - `ERRORS` in each service's `src/constants/errors.ts`.
 
 ```ts
 export const ERRORS = {
   PRODUCT_NOT_FOUND: {
-    code: "PRODUCT_NOT_FOUND",
-    kind: "not_found",
-    message: "Product not found",
+    code: 'PRODUCT_NOT_FOUND',
+    kind: 'not_found',
+    message: 'Product not found',
   },
 } as const satisfies Record<string, DomainErrorDefinition>;
 ```
@@ -128,7 +128,8 @@ Do not throw Nest's `HttpException` from services, so the business rules stay fr
 ```
 
 - The code is also sent in an `X-Error-Code` header.
-- Nest's own errors (unknown route, bad UUID) use the status name as the code, for example `NOT_FOUND` or `BAD_REQUEST`.
+- Nest's own errors (unknown route, malformed JSON) use the status name as the code, for example `NOT_FOUND` or `BAD_REQUEST`.
+- Any other error object, such as a failed health check, is passed on in `details`.
 - A Postgres unique violation the service did not check for becomes a 409 `UNIQUE_VIOLATION`, and is logged as a warning because it means a missing check.
 - Anything else becomes a 500 `INTERNAL_ERROR` with a generic message. The real error and its stack go to the log only.
 
@@ -173,10 +174,25 @@ npm run migration:run:inventory
 
 ## Swagger
 
-Set up in Week 1 task 6, at `/docs`.
+`setupApp()` serves Swagger UI at `/docs` and the OpenAPI JSON at `/docs-json`. It is on outside production; `SWAGGER_ENABLED=true` or `false` overrides that.
 
 - **Controllers:** `@ApiTags`, plus `@ApiOperation({ summary, description })` and one `@ApiResponse` per status code on every endpoint. Use the shared response helpers rather than repeating error descriptions.
-- **DTO fields:** `@ApiProperty` (or `@ApiPropertyOptional`) with a description and a realistic example.
+- **DTO fields:** `@ApiProperty` (or `@ApiPropertyOptional`) with a description and a realistic example, plus the same limits the validators enforce (`minimum`, `maxLength`, `pattern`).
+- **Errors:** one `@ApiErrorResponse(status, ...catalog entries)` per status, listing every code the endpoint can return, for example:
+  ```ts
+  @ApiErrorResponse(HttpStatus.BAD_REQUEST, COMMON_ERRORS.INVALID_ID, COMMON_ERRORS.VALIDATION_FAILED)
+  @ApiErrorResponse(HttpStatus.NOT_FOUND, ERRORS.PRODUCT_NOT_FOUND)
+  ```
+  Put the 500 `INTERNAL_ERROR` response on the controller class, so it covers every endpoint.
+- **Path IDs:** `@ApiParam({ name: 'id', description, format: 'uuid' })`.
+- **List responses:** a concrete class such as `ProductPageResponseDto` (items plus `PageMetaDto`), because Swagger cannot describe the generic `Page<T>`.
+
+## Health checks
+
+- `GET /health/live` returns 200 while the process runs. Kubernetes restarts the pod if it fails.
+- `GET /health/ready` returns 200 when every dependency the service needs answers within its timeout, and 503 otherwise. Kubernetes only sends traffic to ready pods.
+- Both sit outside `/api`, are left out of the request log, and live in `controllers/health.controller.ts` with `@nestjs/terminus`.
+- Readiness checks the database today. Add Kafka when the service starts using it (Week 3). Never put slow or optional dependencies in liveness: a failing liveness probe restarts the pod.
 
 ## Testing
 

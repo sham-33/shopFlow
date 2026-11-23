@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
@@ -15,12 +16,19 @@ export interface PageRequest {
  * filters, for example `class ListProductsQuery extends PaginationQueryDto`.
  */
 export class PaginationQueryDto implements PageRequest {
+  @ApiPropertyOptional({ description: 'Page number, starting at 1', default: 1, minimum: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   public page: number = 1;
 
+  @ApiPropertyOptional({
+    description: 'Items per page',
+    default: DEFAULT_PAGE_SIZE,
+    minimum: 1,
+    maximum: MAX_PAGE_SIZE,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -34,6 +42,21 @@ export interface PageMeta {
   limit: number;
   totalItems: number;
   totalPages: number;
+}
+
+/** PageMeta as a class, so Swagger can describe it in list responses. */
+export class PageMetaDto implements PageMeta {
+  @ApiProperty({ description: 'Page number, starting at 1', example: 1 })
+  public page: number;
+
+  @ApiProperty({ description: 'Items per page', example: 20 })
+  public limit: number;
+
+  @ApiProperty({ description: 'Items matching the query across all pages', example: 42 })
+  public totalItems: number;
+
+  @ApiProperty({ description: 'Number of pages', example: 3 })
+  public totalPages: number;
 }
 
 /** One page of results plus the numbers a client needs to page through. */

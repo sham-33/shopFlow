@@ -12,9 +12,18 @@ export const COMMON_ERRORS = {
     kind: 'invalid_input',
     message: 'Request validation failed',
   },
+  INVALID_ID: {
+    code: 'INVALID_ID',
+    kind: 'invalid_input',
+    message: 'The ID must be a valid UUID',
+  },
   UNIQUE_VIOLATION: {
     code: 'UNIQUE_VIOLATION',
     message: 'A record with the same unique value already exists',
+  },
+  SERVICE_UNAVAILABLE: {
+    code: 'SERVICE_UNAVAILABLE',
+    message: 'Service Unavailable',
   },
   INTERNAL_ERROR: {
     code: 'INTERNAL_ERROR',
