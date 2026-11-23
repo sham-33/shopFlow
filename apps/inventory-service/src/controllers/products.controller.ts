@@ -17,6 +17,7 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
+import { PRODUCT_ID_PARAM } from '../constants.js';
 import { ERRORS } from '../constants/errors.js';
 import { CreateProductDto } from '../dto/create-product.dto.js';
 import { ListProductsQuery } from '../dto/list-products.query.js';
@@ -25,12 +26,6 @@ import { RestockProductDto } from '../dto/restock-product.dto.js';
 import { UpdateProductDto } from '../dto/update-product.dto.js';
 import { toNewProduct, toProductChanges, toProductResponse } from '../mappers/product.mapper.js';
 import { ProductsService } from '../services/products.service.js';
-
-const PRODUCT_ID = {
-  name: 'id',
-  description: 'Product ID',
-  format: 'uuid',
-} as const;
 
 /** HTTP only: validated DTO in, service call, response DTO out. */
 @ApiTags('Products')
@@ -79,7 +74,7 @@ export class ProductsController {
     summary: 'Get a product',
     description: 'Returns one product with its available and reserved stock.',
   })
-  @ApiParam(PRODUCT_ID)
+  @ApiParam(PRODUCT_ID_PARAM)
   @ApiOkResponse({ description: 'The product.', type: ProductResponseDto })
   @ApiErrorResponse(HttpStatus.BAD_REQUEST, COMMON_ERRORS.INVALID_ID)
   @ApiErrorResponse(HttpStatus.NOT_FOUND, ERRORS.PRODUCT_NOT_FOUND)
@@ -93,7 +88,7 @@ export class ProductsController {
     description:
       'Changes the name, price or active flag. Send only the fields to change. The SKU cannot change.',
   })
-  @ApiParam(PRODUCT_ID)
+  @ApiParam(PRODUCT_ID_PARAM)
   @ApiOkResponse({
     description: 'The updated product.',
     type: ProductResponseDto,
@@ -118,7 +113,7 @@ export class ProductsController {
     description:
       'Adds units to the available stock in one atomic update, so restocks and reservations running at the same time never overwrite each other.',
   })
-  @ApiParam(PRODUCT_ID)
+  @ApiParam(PRODUCT_ID_PARAM)
   @ApiOkResponse({
     description: 'The product with its new stock.',
     type: ProductResponseDto,

@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsInt, Max, Min } from 'class-validator';
-import { MAX_STOCK_CHANGE } from './product.constraints.js';
+import { MAX_STOCK_CHANGE } from '../constants.js';
 
 /** Body of POST /api/v1/products/:id/restock. */
 export class RestockProductDto {

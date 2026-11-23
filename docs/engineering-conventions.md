@@ -22,6 +22,7 @@ apps/<service>/
 │   ├── main.ts               # create the app, setupApp(app), listen
 │   ├── app.module.ts         # CommonModule.forRoot(...), DatabaseModule, feature modules
 │   ├── config/               # database.config.ts; data-source.ts (migration CLI only)
+│   ├── constants.ts          # fixed values: port, service name, limits, timeouts
 │   ├── constants/errors.ts   # ERRORS: every error code this service returns
 │   ├── controllers/          # HTTP only
 │   ├── services/             # business rules
@@ -61,7 +62,7 @@ Code used by one service lives in that service. Code that two or more services n
 
 ## DTOs and validation
 
-- One class per request or response shape, in `dto/`. Shared limits (SKU pattern, max price) live next to them, for example in `dto/product.constraints.ts`.
+- One class per request or response shape, in `dto/`. Their limits (SKU pattern, max price) come from `src/constants.ts`.
 - Global pipes, in order:
   1. `TrimStringsPipe` trims every string in bodies and query strings (except `password`), so DTOs do not trim.
   2. `ValidationPipe` with `whitelist`, `forbidNonWhitelisted` and `transform`. Unknown fields are rejected with a 400. This is stricter than `ams`, on purpose.
@@ -214,6 +215,7 @@ npm run migration:run:inventory
   - every promise must be awaited or handled;
   - every class member says `public`, `private` or `protected` (constructors stay unmarked).
 - tsconfig is `strict`, plus `noUncheckedIndexedAccess`, `noImplicitOverride` and `noImplicitReturns`. Only `strictPropertyInitialization` is off, because DTOs and entities are filled in by libraries.
+- Fixed values go in the app's `src/constants.ts`, named in `SCREAMING_SNAKE_CASE` with the unit in the name (`READINESS_DATABASE_TIMEOUT_MS`) and a one-line comment. This covers the port, service name, Swagger text, limits, timeouts and pool sizes. Do not write a bare number or module-level constant in another file. Exceptions: error codes (`src/constants/errors.ts`), injection tokens (next to their interface) and helper functions.
 - Comments explain why, not what.
 
 ## Naming

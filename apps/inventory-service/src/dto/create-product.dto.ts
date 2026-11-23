@@ -5,7 +5,7 @@ import {
   MAX_STOCK_CHANGE,
   SKU_PATTERN,
   SKU_PATTERN_MESSAGE,
-} from './product.constraints.js';
+} from '../constants.js';
 
 /** Body of POST /api/v1/products. */
 export class CreateProductDto {

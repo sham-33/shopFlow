@@ -7,9 +7,7 @@ import {
   HealthCheckService,
   TypeOrmHealthIndicator,
 } from '@nestjs/terminus';
-
-/** Longest a readiness check may wait for the database. */
-const DATABASE_TIMEOUT_MS = 1500;
+import { READINESS_DATABASE_TIMEOUT_MS } from '../constants.js';
 
 /**
  * Kubernetes probes. Served at /health/live and /health/ready, outside the
@@ -44,7 +42,7 @@ export class HealthController {
   @Get('ready')
   public ready(): Promise<HealthCheckResult> {
     return this.health.check([
-      this.database.pingCheck('database').withTimeout(DATABASE_TIMEOUT_MS),
+      this.database.pingCheck('database').withTimeout(READINESS_DATABASE_TIMEOUT_MS),
     ]);
   }
 }

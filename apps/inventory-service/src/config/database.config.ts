@@ -1,5 +1,11 @@
 import { readEnv } from '@app/common';
 import type { DataSourceOptions } from 'typeorm';
+import {
+  DATABASE_CONNECT_TIMEOUT_MS,
+  DATABASE_IDLE_TIMEOUT_MS,
+  DATABASE_POOL_SIZE,
+  SLOW_QUERY_MS,
+} from '../constants.js';
 import { Product } from '../entities/product.entity.js';
 import { Stock } from '../entities/stock.entity.js';
 
@@ -27,11 +33,10 @@ export function inventoryDatabaseConfig(): DataSourceOptions {
     installExtensions: false,
 
     logging: ['error', 'warn'],
-    // Queries slower than this are logged as warnings.
-    maxQueryExecutionTime: 1000,
-    poolSize: 10,
-    connectTimeoutMS: 10_000,
-    extra: { idleTimeoutMillis: 10_000 },
+    maxQueryExecutionTime: SLOW_QUERY_MS,
+    poolSize: DATABASE_POOL_SIZE,
+    connectTimeoutMS: DATABASE_CONNECT_TIMEOUT_MS,
+    extra: { idleTimeoutMillis: DATABASE_IDLE_TIMEOUT_MS },
   };
 }
 

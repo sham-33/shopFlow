@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsNumber, IsString, Length, Max, Min, ValidateIf } from 'class-validator';
-import { MAX_PRICE_RUPEES } from './product.constraints.js';
+import { MAX_PRICE_RUPEES } from '../constants.js';
 
 // ValidateIf(not undefined) instead of IsOptional: IsOptional would also let
 // `null` through, and these columns cannot be null.
