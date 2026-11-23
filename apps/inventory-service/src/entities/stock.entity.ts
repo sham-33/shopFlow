@@ -26,21 +26,21 @@ export class Stock {
     type: 'uuid',
     primaryKeyConstraintName: 'pk_stock',
   })
-  productId: string;
+  public productId: string;
 
   @OneToOne(() => Product, (product) => product.stock, { onDelete: 'CASCADE' })
   @JoinColumn({
     name: 'product_id',
     foreignKeyConstraintName: 'fk_stock_product',
   })
-  product?: Relation<Product>;
+  public product?: Relation<Product>;
 
   @Column({ name: 'available_qty', type: 'integer', default: 0 })
-  availableQty: number;
+  public availableQty: number;
 
   @Column({ name: 'reserved_qty', type: 'integer', default: 0 })
-  reservedQty: number;
+  public reservedQty: number;
 
   @VersionColumn({ type: 'integer' })
-  version: number;
+  public version: number;
 }

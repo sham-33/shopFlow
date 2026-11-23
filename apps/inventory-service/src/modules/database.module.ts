@@ -7,8 +7,6 @@ import { inventoryDatabaseConfig } from '../config/database.config.js';
  * entities with `TypeOrmModule.forFeature([...])`.
  */
 @Module({
-  imports: [
-    TypeOrmModule.forRootAsync({ useFactory: inventoryDatabaseConfig }),
-  ],
+  imports: [TypeOrmModule.forRootAsync({ useFactory: inventoryDatabaseConfig })],
 })
 export class DatabaseModule {}

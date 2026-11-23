@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class InitialSchema1795421247569 implements MigrationInterface {
-  name = 'InitialSchema1795421247569';
+  public name = 'InitialSchema1795421247569';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
@@ -16,9 +16,7 @@ export class InitialSchema1795421247569 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `ALTER TABLE "stock" DROP CONSTRAINT "fk_stock_product"`,
-    );
+    await queryRunner.query(`ALTER TABLE "stock" DROP CONSTRAINT "fk_stock_product"`);
     await queryRunner.query(`DROP TABLE "products"`);
     await queryRunner.query(`DROP TABLE "stock"`);
   }
