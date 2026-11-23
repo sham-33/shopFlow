@@ -1,0 +1,109 @@
+# Local infrastructure for ShopFlow: Postgres, a single-node Kafka (KRaft),
+# a one-shot topic creator and the AKHQ web UI.
+#
+#   docker compose up -d      start everything (topics are created once Kafka is healthy)
+#   docker compose down       stop (add -v to also wipe Postgres and Kafka data)
+#
+# Host ports can be changed in .env (see .env.example).
+
+name: shopflow
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-shopflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shopflow}
+      POSTGRES_DB: postgres
+    ports:
+      # 5433 on the host so it does not clash with a Postgres installed locally.
+      - '${POSTGRES_PORT:-5433}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Creates orders_db, inventory_db and payment_db on first start only
+      # (when the data volume is empty).
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # -h 127.0.0.1 forces TCP, so the check fails while the init scripts are
+      # still running on the socket-only bootstrap server.
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d inventory_db',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  kafka:
+    image: apache/kafka:4.4.0
+    hostname: kafka
+    ports:
+      - '${KAFKA_PORT:-9092}:9092'
+    environment:
+      # Single node that is both broker and KRaft controller (no ZooKeeper).
+      CLUSTER_ID: rCpBxVQ0QJWMkScoBeduHQ
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # INTERNAL is used by other containers (kafka:19092),
+      # EXTERNAL by services running on the host (localhost:9092).
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL://localhost:${KAFKA_PORT:-9092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      # Topics are created only by kafka-init, so a typo never makes a new topic.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+      # One broker, so every internal topic has a single replica.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          '/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:19092 > /dev/null 2>&1',
+        ]
+      interval: 10s
+      timeout: 15s
+      retries: 12
+      start_period: 15s
+
+  kafka-init:
+    image: apache/kafka:4.4.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      BOOTSTRAP_SERVER: kafka:19092
+    volumes:
+      - ./docker/kafka/create-topics.sh:/create-topics.sh:ro
+    entrypoint: ['/bin/bash', '/create-topics.sh']
+    restart: 'no'
+
+  akhq:
+    image: tchiotludo/akhq:0.29.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - '${AKHQ_PORT:-8080}:8080'
+    environment:
+      AKHQ_CONFIGURATION: |
+        akhq:
+          connections:
+            shopflow-local:
+              properties:
+                bootstrap.servers: "kafka:19092"
+
+volumes:
+  postgres-data:
+  kafka-data:

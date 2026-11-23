@@ -1,0 +1,41 @@
+{
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "resolvePackageJsonExports": true,
+    "target": "ES2023",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "isolatedModules": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "declaration": true,
+    "removeComments": true,
+    "sourceMap": true,
+    "incremental": true,
+    "skipLibCheck": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+
+    "strict": true,
+    // DTOs and TypeORM entities are filled in by class-transformer and TypeORM,
+    // not by constructors, so this one strict check is turned off.
+    "strictPropertyInitialization": false,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+
+    "types": ["vitest/globals", "node"]
+  },
+  "files": [],
+  "references": [
+    { "path": "./apps/order-service/tsconfig.app.json" },
+    { "path": "./apps/inventory-service/tsconfig.app.json" },
+    { "path": "./apps/payment-service/tsconfig.app.json" },
+    { "path": "./tsconfig.spec.json" }
+  ]
+}
