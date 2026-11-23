@@ -7,28 +7,30 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import {
-  getCorrelationId,
-  getRequestCorrelationId,
-} from '../correlation/correlation-id.js';
+import { STATUS_CODES } from 'node:http';
+import { getCorrelationId, getRequestCorrelationId } from '../correlation/correlation-id.js';
+import { COMMON_ERRORS } from './common-errors.js';
 import { DomainException, type DomainErrorKind } from './domain.exception.js';
 
 /** The JSON body of every error response. */
 export interface ErrorResponseBody {
   statusCode: number;
-  /** Machine-readable code, for example `PRODUCT_NOT_FOUND` or `NOT_FOUND`. */
+  /** Stable machine-readable code, for example `PRODUCT_NOT_FOUND`. Clients branch on this. */
+  code: string;
+  /** HTTP status text, for example `Not Found`. */
   error: string;
   message: string;
+  /** Extra information, for example `{ productId }` or the invalid fields. */
   details?: Record<string, unknown>;
   path: string;
   timestamp: string;
   correlationId?: string;
 }
 
-type ErrorDescription = Pick<
-  ErrorResponseBody,
-  'statusCode' | 'error' | 'message' | 'details'
->;
+/** Response header that repeats the error code, so it shows up in access logs. */
+export const ERROR_CODE_HEADER = 'X-Error-Code';
+
+type ErrorDescription = Pick<ErrorResponseBody, 'statusCode' | 'code' | 'message' | 'details'>;
 
 const STATUS_BY_KIND: Record<DomainErrorKind, HttpStatus> = {
   invalid_input: HttpStatus.BAD_REQUEST,
@@ -48,7 +50,7 @@ const POSTGRES_UNIQUE_VIOLATION = '23505';
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
-  catch(exception: unknown, host: ArgumentsHost): void {
+  public catch(exception: unknown, host: ArgumentsHost): void {
     // Only HTTP is handled here. Kafka handlers get their own error handling
     // (retry and dead-letter topics) in libs/messaging.
     if (host.getType() !== 'http') {
@@ -58,23 +60,28 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const http = host.switchToHttp();
     const request = http.getRequest<Request>();
     const response = http.getResponse<Response>();
-    const description = this.describe(exception);
+    const { statusCode, code, message, details } = this.describe(exception);
 
     const body: ErrorResponseBody = {
-      ...description,
+      statusCode,
+      code,
+      error: STATUS_CODES[statusCode] ?? 'Error',
+      message,
+      details,
       path: request.originalUrl,
       timestamp: new Date().toISOString(),
       correlationId: getRequestCorrelationId(request) ?? getCorrelationId(),
     };
 
-    response.status(body.statusCode).json(body);
+    response.setHeader(ERROR_CODE_HEADER, code);
+    response.status(statusCode).json(body);
   }
 
   private describe(exception: unknown): ErrorDescription {
     if (exception instanceof DomainException) {
       return {
         statusCode: STATUS_BY_KIND[exception.kind],
-        error: exception.code,
+        code: exception.code,
         message: exception.message,
         details: exception.details,
       };
@@ -87,7 +94,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
       return {
         statusCode,
-        error: HttpStatus[statusCode] ?? 'HTTP_ERROR',
+        // Nest's own errors (unknown route, bad UUID, …) use the status name as their code.
+        code: HttpStatus[statusCode] ?? 'HTTP_ERROR',
         message: messageOf(exception),
       };
     }
@@ -98,16 +106,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.logger.warn(exception);
       return {
         statusCode: HttpStatus.CONFLICT,
-        error: 'UNIQUE_VIOLATION',
-        message: 'A record with the same unique value already exists',
+        ...COMMON_ERRORS.UNIQUE_VIOLATION,
       };
     }
 
     this.logger.error(exception);
     return {
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-      error: 'INTERNAL_ERROR',
-      message: 'Internal server error',
+      ...COMMON_ERRORS.INTERNAL_ERROR,
     };
   }
 }
@@ -141,8 +147,5 @@ function isUniqueViolation(exception: unknown): boolean {
     code?: unknown;
     driverError?: { code?: unknown };
   };
-  return (
-    code === POSTGRES_UNIQUE_VIOLATION ||
-    driverError?.code === POSTGRES_UNIQUE_VIOLATION
-  );
+  return code === POSTGRES_UNIQUE_VIOLATION || driverError?.code === POSTGRES_UNIQUE_VIOLATION;
 }

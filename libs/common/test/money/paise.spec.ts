@@ -1,7 +1,9 @@
 import {
   decimalToPaise,
   paiseToDecimal,
+  paiseToRupees,
   paiseTransformer,
+  rupeesToPaise,
 } from '../../src/money/paise.js';
 
 describe('decimalToPaise', () => {
@@ -19,12 +21,9 @@ describe('decimalToPaise', () => {
     expect(decimalToPaise(amount)).toBe(paise);
   });
 
-  it.each(['', 'abc', '1.234', '1,50', '.5', '1e3', ' 1.00'])(
-    'rejects "%s"',
-    (amount) => {
-      expect(() => decimalToPaise(amount)).toThrow(TypeError);
-    },
-  );
+  it.each(['', 'abc', '1.234', '1,50', '.5', '1e3', ' 1.00'])('rejects "%s"', (amount) => {
+    expect(() => decimalToPaise(amount)).toThrow(TypeError);
+  });
 
   it('rejects amounts too large to count exactly in paise', () => {
     expect(() => decimalToPaise('99999999999999999.00')).toThrow(RangeError);
@@ -43,12 +42,9 @@ describe('paiseToDecimal', () => {
     expect(paiseToDecimal(paise)).toBe(amount);
   });
 
-  it.each([1.5, Number.NaN, Number.POSITIVE_INFINITY])(
-    'rejects %s',
-    (paise) => {
-      expect(() => paiseToDecimal(paise)).toThrow(RangeError);
-    },
-  );
+  it.each([1.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects %s', (paise) => {
+    expect(() => paiseToDecimal(paise)).toThrow(RangeError);
+  });
 });
 
 describe('paiseTransformer', () => {
@@ -59,8 +55,44 @@ describe('paiseTransformer', () => {
   });
 
   it('round-trips a value through the database format', () => {
-    expect(paiseTransformer.from(paiseTransformer.to(19999) ?? null)).toBe(
-      19999,
-    );
+    expect(paiseTransformer.from(paiseTransformer.to(19999) ?? null)).toBe(19999);
+  });
+});
+
+describe('rupeesToPaise', () => {
+  it.each([
+    [499.5, 49950],
+    [19.99, 1999],
+    [0.1, 10],
+    [0, 0],
+    [9999999999.99, 999999999999],
+  ])('turns %s rupees into %i paise', (rupees, paise) => {
+    expect(rupeesToPaise(rupees)).toBe(paise);
+  });
+
+  it.each([1.234, 1e21, 1e-7])('rejects %s instead of rounding it', (rupees) => {
+    expect(() => rupeesToPaise(rupees)).toThrow(TypeError);
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY])('rejects %s', (rupees) => {
+    expect(() => rupeesToPaise(rupees)).toThrow(RangeError);
+  });
+});
+
+describe('paiseToRupees', () => {
+  it.each([
+    [49950, 499.5],
+    [1999, 19.99],
+    [5, 0.05],
+  ])('turns %i paise into %s rupees', (paise, rupees) => {
+    expect(paiseToRupees(paise)).toBe(rupees);
+  });
+
+  it('prints exactly in JSON', () => {
+    expect(JSON.stringify({ price: paiseToRupees(1999) })).toBe('{"price":19.99}');
+  });
+
+  it('rejects a fractional number of paise', () => {
+    expect(() => paiseToRupees(1.5)).toThrow(RangeError);
   });
 });

@@ -434,8 +434,10 @@ One `AllExceptionsFilter` in `libs/common` turns every error into the same JSON 
 ```json
 {
   "statusCode": 409,
-  "error": "INVALID_ORDER_STATE",
-  "message": "Order ord_7d1e cannot move from FAILED to CANCELLED",
+  "code": "INVALID_ORDER_STATE",
+  "error": "Conflict",
+  "message": "Order cannot move to the requested status",
+  "details": { "orderId": "ord_7d1e", "from": "FAILED", "to": "CANCELLED" },
   "path": "/api/v1/orders/ord_7d1e/cancel",
   "timestamp": "2026-11-22T10:20:00.000Z",
   "correlationId": "c-91ab..."
@@ -452,7 +454,7 @@ One `AllExceptionsFilter` in `libs/common` turns every error into the same JSON 
 | TypeORM `QueryFailedError` with Postgres code `23505`                              | 409         | A unique constraint the code did not catch                 |
 | Anything else                                                                          | 500         | Logged with stack trace; the client sees a generic message |
 
-All custom exceptions extend one `DomainException` base class that carries an error code. The filter maps the code to an HTTP status.
+Every error code is defined once, in the service's `src/constants/errors.ts` catalog, with its kind (`not_found`, `conflict`, `unprocessable`, `invalid_input`) and message. All custom exceptions extend one `DomainException` base class and take an entry from that catalog, plus `details` for the specific IDs. The filter maps the kind to an HTTP status and also sends the code in an `X-Error-Code` header.
 
 ### 6.5 Repository pattern
 
@@ -773,7 +775,7 @@ Goal: one service with clean REST APIs, running in Docker.
 - [x] Write `docker-compose.yml` with Postgres, Kafka (KRaft), `kafka-init` and AKHQ
 - [x] Build `libs/common`: `AllExceptionsFilter`, `DomainException`, global `ValidationPipe`, correlation ID middleware, pino logger, pagination DTO
 - [x] Inventory Service: `products`, `stock` entities and the first migration
-- [ ] Product APIs (create, list, get, update, restock) with DTOs, mapper and repository interface
+- [x] Product APIs (create, list, get, update, restock) with DTOs, mapper and repository interface
 - [ ] Swagger at `/docs` and health checks
 - [ ] Unit tests for the product service and the exception filter
 

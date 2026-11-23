@@ -1,3 +1,4 @@
+import { COMMON_ERRORS } from './common-errors.js';
 import { DomainException } from './domain.exception.js';
 
 export interface FieldError {
@@ -9,10 +10,7 @@ export interface FieldError {
 /** Thrown by the global ValidationPipe when a request body or query is invalid. */
 export class RequestValidationException extends DomainException {
   constructor(fieldErrors: FieldError[]) {
-    super({
-      code: 'VALIDATION_FAILED',
-      kind: 'invalid_input',
-      message: 'Request validation failed',
+    super(COMMON_ERRORS.VALIDATION_FAILED, {
       details: { fields: fieldErrors },
     });
   }

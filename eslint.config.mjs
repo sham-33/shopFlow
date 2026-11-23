@@ -22,6 +22,12 @@ export default defineConfig(
     },
     rules: {
       '@typescript-eslint/no-floating-promises': 'error',
+      // Every class member says public, private or protected (as in ams), so
+      // a class's public surface is obvious. Constructors stay unmarked.
+      '@typescript-eslint/explicit-member-accessibility': [
+        'error',
+        { accessibility: 'explicit', overrides: { constructors: 'no-public' } },
+      ],
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },

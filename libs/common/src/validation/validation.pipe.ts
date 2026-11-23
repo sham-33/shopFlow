@@ -15,8 +15,7 @@ export function createValidationPipe(): ValidationPipe {
     whitelist: true,
     forbidNonWhitelisted: true,
     transform: true,
-    exceptionFactory: (errors) =>
-      new RequestValidationException(flattenValidationErrors(errors)),
+    exceptionFactory: (errors) => new RequestValidationException(flattenValidationErrors(errors)),
   });
 }
 
@@ -24,17 +23,10 @@ export function createValidationPipe(): ValidationPipe {
  * Turns class-validator's nested error tree into a flat list, one entry per
  * field, with paths such as `items.0.quantity`.
  */
-export function flattenValidationErrors(
-  errors: ValidationError[],
-  parentPath = '',
-): FieldError[] {
+export function flattenValidationErrors(errors: ValidationError[], parentPath = ''): FieldError[] {
   return errors.flatMap((error) => {
-    const field = parentPath
-      ? `${parentPath}.${error.property}`
-      : error.property;
-    const own = error.constraints
-      ? [{ field, messages: Object.values(error.constraints) }]
-      : [];
+    const field = parentPath ? `${parentPath}.${error.property}` : error.property;
+    const own = error.constraints ? [{ field, messages: Object.values(error.constraints) }] : [];
     return [...own, ...flattenValidationErrors(error.children ?? [], field)];
   });
 }

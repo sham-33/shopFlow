@@ -1,62 +1,47 @@
-import {
-  Body,
-  Controller,
-  Get,
-  type INestApplication,
-  Param,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Get, type INestApplication, Param, Post, Query } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Type } from 'class-transformer';
-import {
-  IsArray,
-  IsInt,
-  IsString,
-  Length,
-  Min,
-  ValidateNested,
-} from 'class-validator';
+import { IsArray, IsInt, IsString, Length, Min, ValidateNested } from 'class-validator';
 import { Logger } from 'nestjs-pino';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { CommonModule } from '../src/common.module.js';
 import { getCorrelationId } from '../src/correlation/correlation-id.js';
 import type { ErrorResponseBody } from '../src/exceptions/all-exceptions.filter.js';
-import {
-  type DomainErrorKind,
-  DomainException,
-} from '../src/exceptions/domain.exception.js';
+import { type DomainErrorKind, DomainException } from '../src/exceptions/domain.exception.js';
 import type { FieldError } from '../src/exceptions/request-validation.exception.js';
 import { PaginationQueryDto } from '../src/pagination/pagination.js';
 
 class ItemDto {
   @IsInt()
   @Min(1)
-  quantity: number;
+  public quantity: number;
 }
 
 class CreateThingDto {
   @IsString()
   @Length(3, 20)
-  name: string;
+  public name: string;
 
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ItemDto)
-  items: ItemDto[];
+  public items: ItemDto[];
 }
 
 class TestDomainException extends DomainException {
   constructor(kind: DomainErrorKind) {
-    super({ code: 'TEST_ERROR', kind, message: `A ${kind} error` });
+    super(
+      { code: 'TEST_ERROR', kind, message: `A ${kind} error` },
+      { details: { thingId: 't-1' } },
+    );
   }
 }
 
 @Controller('things')
 class ThingsController {
   @Get()
-  list(@Query() query: PaginationQueryDto) {
+  public list(@Query() query: PaginationQueryDto) {
     return {
       page: query.page,
       limit: query.limit,
@@ -66,23 +51,23 @@ class ThingsController {
   }
 
   @Post()
-  create(@Body() body: CreateThingDto): CreateThingDto {
+  public create(@Body() body: CreateThingDto): CreateThingDto {
     return body;
   }
 
   @Get('domain/:kind')
-  domainError(@Param('kind') kind: DomainErrorKind): never {
+  public domainError(@Param('kind') kind: DomainErrorKind): never {
     throw new TestDomainException(kind);
   }
 
   @Get('duplicate')
-  duplicate(): never {
+  public duplicate(): never {
     // What TypeORM's QueryFailedError looks like for a Postgres unique violation.
     throw Object.assign(new Error('duplicate key value'), { code: '23505' });
   }
 
   @Get('crash')
-  crash(): never {
+  public crash(): never {
     throw new Error('secret internal detail');
   }
 }
@@ -111,9 +96,7 @@ describe('CommonModule', () => {
 
       const correlationId = res.get('X-Correlation-Id');
       expect(correlationId).toMatch(/^[0-9a-f-]{36}$/);
-      expect((res.body as { correlationId: string }).correlationId).toBe(
-        correlationId,
-      );
+      expect((res.body as { correlationId: string }).correlationId).toBe(correlationId);
     });
 
     it('keeps a valid incoming ID', async () => {
@@ -123,9 +106,7 @@ describe('CommonModule', () => {
         .expect(200);
 
       expect(res.get('X-Correlation-Id')).toBe('c-91ab');
-      expect((res.body as { correlationId: string }).correlationId).toBe(
-        'c-91ab',
-      );
+      expect((res.body as { correlationId: string }).correlationId).toBe('c-91ab');
     });
 
     it('replaces an incoming ID with unsafe characters', async () => {
@@ -146,22 +127,16 @@ describe('CommonModule', () => {
     });
 
     it('turns query strings into numbers', async () => {
-      const res = await request(app.getHttpServer())
-        .get('/things?page=3&limit=50')
-        .expect(200);
+      const res = await request(app.getHttpServer()).get('/things?page=3&limit=50').expect(200);
 
       expect(res.body).toMatchObject({ page: 3, limit: 50 });
     });
 
     it('rejects a limit above 100', async () => {
-      const res = await request(app.getHttpServer())
-        .get('/things?limit=500')
-        .expect(400);
+      const res = await request(app.getHttpServer()).get('/things?limit=500').expect(400);
 
       expect((res.body as ErrorResponseBody).details).toEqual({
-        fields: [
-          { field: 'limit', messages: ['limit must not be greater than 100'] },
-        ],
+        fields: [{ field: 'limit', messages: ['limit must not be greater than 100'] }],
       });
     });
   });
@@ -188,7 +163,8 @@ describe('CommonModule', () => {
       const body = res.body as ErrorResponseBody;
       expect(body).toMatchObject({
         statusCode: 400,
-        error: 'VALIDATION_FAILED',
+        code: 'VALIDATION_FAILED',
+        error: 'Bad Request',
         message: 'Request validation failed',
         path: '/things',
         correlationId: 'c-validation',
@@ -207,23 +183,59 @@ describe('CommonModule', () => {
     });
   });
 
+  describe('trimming', () => {
+    it('trims strings in the body before returning the DTO', async () => {
+      await request(app.getHttpServer())
+        .post('/things')
+        .send({ name: '  widget  ', items: [{ quantity: 2 }] })
+        .expect(201, { name: 'widget', items: [{ quantity: 2 }] });
+    });
+
+    it('trims before validating, so padding does not pass a length check', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/things')
+        .send({ name: '  ab  ', items: [{ quantity: 2 }] })
+        .expect(400);
+
+      expect((res.body as ErrorResponseBody).details).toEqual({
+        fields: [
+          { field: 'name', messages: ['name must be longer than or equal to 3 characters'] },
+        ],
+      });
+    });
+
+    it('trims query strings too', async () => {
+      const res = await request(app.getHttpServer()).get('/things?page=%202%20').expect(200);
+
+      expect(res.body).toMatchObject({ page: 2 });
+    });
+  });
+
   describe('errors', () => {
+    it('uses the HTTP status text as `error`', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/things/domain/unprocessable')
+        .expect(422);
+
+      expect((res.body as ErrorResponseBody).error).toBe('Unprocessable Entity');
+    });
+
     it.each([
       ['invalid_input', 400],
       ['not_found', 404],
       ['conflict', 409],
       ['unprocessable', 422],
     ])('maps a %s DomainException to %i', async (kind, status) => {
-      const res = await request(app.getHttpServer())
-        .get(`/things/domain/${kind}`)
-        .expect(status);
+      const res = await request(app.getHttpServer()).get(`/things/domain/${kind}`).expect(status);
 
       expect(res.body).toMatchObject({
         statusCode: status,
-        error: 'TEST_ERROR',
+        code: 'TEST_ERROR',
         message: `A ${kind} error`,
+        details: { thingId: 't-1' },
         path: `/things/domain/${kind}`,
       });
+      expect(res.get('X-Error-Code')).toBe('TEST_ERROR');
     });
 
     it('returns the same shape for an unknown route', async () => {
@@ -234,31 +246,30 @@ describe('CommonModule', () => {
 
       expect(res.body).toMatchObject({
         statusCode: 404,
-        error: 'NOT_FOUND',
+        code: 'NOT_FOUND',
+        error: 'Not Found',
         path: '/nope',
         correlationId: 'c-404',
       });
     });
 
     it('maps a Postgres unique violation to 409', async () => {
-      const res = await request(app.getHttpServer())
-        .get('/things/duplicate')
-        .expect(409);
+      const res = await request(app.getHttpServer()).get('/things/duplicate').expect(409);
 
       expect(res.body).toMatchObject({
         statusCode: 409,
-        error: 'UNIQUE_VIOLATION',
+        code: 'UNIQUE_VIOLATION',
+        error: 'Conflict',
       });
     });
 
     it('hides the details of an unexpected error behind a 500', async () => {
-      const res = await request(app.getHttpServer())
-        .get('/things/crash')
-        .expect(500);
+      const res = await request(app.getHttpServer()).get('/things/crash').expect(500);
 
       expect(res.body).toMatchObject({
         statusCode: 500,
-        error: 'INTERNAL_ERROR',
+        code: 'INTERNAL_ERROR',
+        error: 'Internal Server Error',
         message: 'Internal server error',
       });
       expect(JSON.stringify(res.body)).not.toContain('secret internal detail');

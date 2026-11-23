@@ -2,50 +2,53 @@
  * What kind of failure a domain error is. Domain code stays free of HTTP;
  * `AllExceptionsFilter` maps each kind to a status code.
  */
-export type DomainErrorKind =
-  'invalid_input' | 'not_found' | 'conflict' | 'unprocessable';
+export type DomainErrorKind = 'invalid_input' | 'not_found' | 'conflict' | 'unprocessable';
+
+/** One entry of an error catalog: a stable code clients rely on, and its message. */
+export interface ErrorDefinition {
+  code: string;
+  message: string;
+}
+
+/** A catalog entry for an expected business error. `kind` decides the HTTP status. */
+export interface DomainErrorDefinition extends ErrorDefinition {
+  kind: DomainErrorKind;
+}
 
 export interface DomainExceptionOptions {
-  /** Stable, machine-readable code, for example `INVALID_ORDER_STATE`. */
-  code: string;
-  kind: DomainErrorKind;
-  message: string;
-  /** Extra data for the client, such as field errors. Must be safe to show. */
+  /**
+   * Values that explain this occurrence, for example `{ productId }`. Sent to
+   * the client, so they must be safe to show.
+   */
   details?: Record<string, unknown>;
   cause?: unknown;
 }
 
 /**
- * Base class for every expected business error, for example
- * `ProductNotFoundException` or `InvalidOrderStateException`.
+ * Base class for every expected business error. The code, kind and message
+ * come from the service's error catalog (`src/constants/errors.ts`), so every
+ * code a client can receive is listed in one place.
  *
  * @example
  * export class ProductNotFoundException extends DomainException {
  *   constructor(productId: string) {
- *     super({
- *       code: 'PRODUCT_NOT_FOUND',
- *       kind: 'not_found',
- *       message: `Product ${productId} was not found`,
- *     });
+ *     super(ERRORS.PRODUCT_NOT_FOUND, { details: { productId } });
  *   }
  * }
  */
 export abstract class DomainException extends Error {
-  readonly code: string;
-  readonly kind: DomainErrorKind;
-  readonly details?: Record<string, unknown>;
+  public readonly code: string;
+  public readonly kind: DomainErrorKind;
+  public readonly details?: Record<string, unknown>;
 
-  protected constructor({
-    code,
-    kind,
-    message,
-    details,
-    cause,
-  }: DomainExceptionOptions) {
-    super(message, cause === undefined ? undefined : { cause });
+  protected constructor(
+    definition: DomainErrorDefinition,
+    { details, cause }: DomainExceptionOptions = {},
+  ) {
+    super(definition.message, cause === undefined ? undefined : { cause });
     this.name = new.target.name;
-    this.code = code;
-    this.kind = kind;
+    this.code = definition.code;
+    this.kind = definition.kind;
     this.details = details;
   }
 }

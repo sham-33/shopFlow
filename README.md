@@ -33,6 +33,26 @@ Copy `.env.example` to `.env` to change ports or credentials.
 
 Topics are created by the `kafka-init` container from [docker/kafka/create-topics.sh](docker/kafka/create-topics.sh). Auto-creation is turned off in the broker, so add new topics to that script. The databases are created by [docker/postgres/init](docker/postgres/init) on the first start only; run `docker compose down -v` to wipe all data and start fresh.
 
+## Inventory API
+
+All routes are under `/api/v1`. Prices are in rupees (at most 2 decimals); stock is in units.
+
+| Method and path                             | What it does                                      |
+| ------------------------------------------- | ------------------------------------------------- |
+| `POST /api/v1/products`                     | Create a product with its starting stock          |
+| `GET /api/v1/products?search=&page=&limit=` | List products, searching name and SKU             |
+| `GET /api/v1/products/:id`                  | One product with its available and reserved stock |
+| `PATCH /api/v1/products/:id`                | Change name, price or the active flag             |
+| `POST /api/v1/products/:id/restock`         | Add units to the available stock                  |
+
+```bash
+curl -X POST localhost:3002/api/v1/products \
+  -H 'content-type: application/json' \
+  -d '{"sku":"TSHIRT-RED-M","name":"Red T-shirt","price":499.5,"initialQuantity":10}'
+```
+
+Errors always come back in the same shape: `statusCode`, `code` (a stable code such as `DUPLICATE_SKU`), `error` (the HTTP status text), `message`, `details` (for example the invalid fields), `path`, `timestamp` and `correlationId`. The code is also sent in an `X-Error-Code` header. Every code a service can return is listed in its `src/constants/errors.ts`.
+
 ## Database migrations
 
 The schema changes only through TypeORM migrations; `synchronize` is off. Each service's migrations live in `apps/<service>/src/migrations/`.

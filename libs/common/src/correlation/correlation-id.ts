@@ -37,10 +37,7 @@ export function runWithCorrelationId<T>(correlationId: string, fn: () => T): T {
  * Both the correlation middleware and the HTTP logger call this, in whichever
  * order Nest runs them, and always get the same ID.
  */
-export function resolveCorrelationId(
-  req: IncomingMessage,
-  res: ServerResponse,
-): string {
+export function resolveCorrelationId(req: IncomingMessage, res: ServerResponse): string {
   const request = req as CorrelatedRequest;
   if (request.correlationId) {
     return request.correlationId;
@@ -48,8 +45,7 @@ export function resolveCorrelationId(
 
   const header = req.headers[CORRELATION_ID_HEADER.toLowerCase()];
   const incoming = Array.isArray(header) ? header[0] : header;
-  const correlationId =
-    incoming && VALID_CORRELATION_ID.test(incoming) ? incoming : randomUUID();
+  const correlationId = incoming && VALID_CORRELATION_ID.test(incoming) ? incoming : randomUUID();
 
   request.correlationId = correlationId;
   if (!res.headersSent) {
@@ -59,8 +55,6 @@ export function resolveCorrelationId(
 }
 
 /** The correlation ID already chosen for this request, if any. */
-export function getRequestCorrelationId(
-  req: IncomingMessage,
-): string | undefined {
+export function getRequestCorrelationId(req: IncomingMessage): string | undefined {
   return (req as CorrelatedRequest).correlationId;
 }

@@ -1,0 +1,222 @@
+# ShopFlow Engineering Conventions
+
+How code in this repo is written: structure, HTTP endpoints, errors, data access, money, tests and style. It follows the team's NestJS repos (`ams`, `analytics`, `payment`), and is stricter where noted. The design itself is in [plan.md](plan.md).
+
+## Stack notes
+
+NestJS 12 packages are ESM only, so this repo is ESM too. This is why it differs from the older team repos:
+
+- Relative imports end in `.js`: `import { AppModule } from './app.module.js'`.
+- Use `import.meta.dirname`, never `__dirname`.
+- Tests run on **Vitest**, not Jest. The API is the same apart from `vi.fn()` and `vi.spyOn()`.
+- TypeScript is pinned to `~6.0` because typescript-eslint does not support 7 yet.
+- TypeORM is 1.x. Its CLI runs through `tsx` (see [Database and migrations](#database-and-migrations)).
+
+## Project structure
+
+Each app is organised by layer. Tests live in `test/`, which mirrors `src/`.
+
+```
+apps/<service>/
+├── src/
+│   ├── main.ts               # create the app, setupApp(app), listen
+│   ├── app.module.ts         # CommonModule.forRoot(...), DatabaseModule, feature modules
+│   ├── config/               # database.config.ts; data-source.ts (migration CLI only)
+│   ├── constants/errors.ts   # ERRORS: every error code this service returns
+│   ├── controllers/          # HTTP only
+│   ├── services/             # business rules
+│   ├── repository/           # <name>.repository.ts (interface + token), typeorm-<name>.repository.ts
+│   ├── entities/             # TypeORM tables
+│   ├── dto/                  # request and response classes
+│   ├── mappers/              # DTO <-> service values and entities
+│   ├── exceptions/           # one DomainException subclass per error
+│   ├── modules/              # database.module.ts and one module per feature
+│   └── migrations/
+└── test/                     # same folders as src/, e.g. test/services/products.service.spec.ts
+
+libs/common/                  # imported as @app/common by every service
+├── src/                      # errors, validation, trimming, logging, correlation IDs, pagination, money, setupApp
+└── test/
+```
+
+Code used by one service lives in that service. Code that two or more services need goes in a `libs/` library.
+
+## Checklist: new or changed HTTP endpoint
+
+1. **Error codes**: add any new code to `src/constants/errors.ts` first, then an exception class in `exceptions/`.
+2. **DTOs**: request and response classes in `dto/`, with class-validator rules and Swagger `@ApiProperty` (description and example).
+3. **Controller**: thin. Swagger `@ApiOperation` and one `@ApiResponse` per status code.
+4. **Service**: the rules. Plain values and entities in and out, money in paise, no HTTP types.
+5. **Repository**: add a method to the interface and the TypeORM class. Take an optional `EntityManager`.
+6. **Migration** if the schema changes (never `synchronize`).
+7. **Tests** in `test/`: the service's rules and edge cases, plus at least one controller test per endpoint.
+
+## Controllers
+
+- Version every controller: `@Controller({ path: 'products', version: '1' })`. With `setupApp()` this serves `/api/v1/products`.
+- Validate path IDs with `ParseUUIDPipe`.
+- Read the DTO, call one service method, map the result with a mapper, return a response DTO. No rules, no queries.
+- Never return a TypeORM entity. Always map it to a response DTO.
+- Set `@HttpCode(HttpStatus.OK)` on POST actions that do not create anything (for example `restock`).
+
+## DTOs and validation
+
+- One class per request or response shape, in `dto/`. Shared limits (SKU pattern, max price) live next to them, for example in `dto/product.constraints.ts`.
+- Global pipes, in order:
+  1. `TrimStringsPipe` trims every string in bodies and query strings (except `password`), so DTOs do not trim.
+  2. `ValidationPipe` with `whitelist`, `forbidNonWhitelisted` and `transform`. Unknown fields are rejected with a 400. This is stricter than `ams`, on purpose.
+- For PATCH DTOs, use `@ValidateIf((_, value) => value !== undefined)` instead of `@IsOptional()`, because `@IsOptional()` also lets `null` through.
+- List endpoints extend `PaginationQueryDto` (`?page=&limit=`, at most 100 per page) and return `Page<T>`: `{ items, meta: { page, limit, totalItems, totalPages } }`.
+
+## Error handling
+
+### The catalog
+
+Every error code a client can receive is listed once:
+
+- `COMMON_ERRORS` in `libs/common` (`VALIDATION_FAILED`, `UNIQUE_VIOLATION`, `INTERNAL_ERROR`).
+- `ERRORS` in each service's `src/constants/errors.ts`.
+
+```ts
+export const ERRORS = {
+  PRODUCT_NOT_FOUND: {
+    code: "PRODUCT_NOT_FOUND",
+    kind: "not_found",
+    message: "Product not found",
+  },
+} as const satisfies Record<string, DomainErrorDefinition>;
+```
+
+Codes are part of the API: never rename or reuse one. Keys and codes are `SCREAMING_SNAKE_CASE` and match.
+
+### Throwing
+
+Services throw a `DomainException` subclass that takes a catalog entry. Specific values go in `details`, not the message:
+
+```ts
+export class ProductNotFoundException extends DomainException {
+  constructor(productId: string) {
+    super(ERRORS.PRODUCT_NOT_FOUND, { details: { productId } });
+  }
+}
+```
+
+Do not throw Nest's `HttpException` from services, so the business rules stay free of HTTP.
+
+### What the client gets
+
+`AllExceptionsFilter` (global) maps the kind to a status:
+
+| Kind            | Status |
+| --------------- | ------ |
+| `invalid_input` | 400    |
+| `not_found`     | 404    |
+| `conflict`      | 409    |
+| `unprocessable` | 422    |
+
+```json
+{
+  "statusCode": 404,
+  "code": "PRODUCT_NOT_FOUND",
+  "error": "Not Found",
+  "message": "Product not found",
+  "details": { "productId": "33444446-505d-4aaf-b42a-5cbc575a9783" },
+  "path": "/api/v1/products/33444446-505d-4aaf-b42a-5cbc575a9783",
+  "timestamp": "2026-11-23T11:35:57.258Z",
+  "correlationId": "c-91ab"
+}
+```
+
+- The code is also sent in an `X-Error-Code` header.
+- Nest's own errors (unknown route, bad UUID) use the status name as the code, for example `NOT_FOUND` or `BAD_REQUEST`.
+- A Postgres unique violation the service did not check for becomes a 409 `UNIQUE_VIOLATION`, and is logged as a warning because it means a missing check.
+- Anything else becomes a 500 `INTERNAL_ERROR` with a generic message. The real error and its stack go to the log only.
+
+## Services and data access
+
+- Services depend on a repository **interface** and its `Symbol` token, never on TypeORM:
+  ```ts
+  constructor(@Inject(PRODUCT_REPOSITORY) private readonly products: ProductRepository) {}
+  ```
+  The module binds the token: `{ provide: PRODUCT_REPOSITORY, useClass: TypeOrmProductRepository }`.
+- Every repository method takes an optional `EntityManager`, so a caller can put several calls (and an outbox event) in one transaction: `dataSource.transaction(async (manager) => { ... })`.
+- Change counters with one conditional SQL `UPDATE` (`available_qty = available_qty + :n`), never read-modify-write. Use `@VersionColumn` for whole rows.
+- Keep services small and focused. Split by subdomain rather than growing one large file.
+- Log with `private readonly logger = new Logger(ClassName.name)`. Never log personal data.
+
+## Money
+
+- Postgres stores money as `numeric(12,2)` rupees.
+- Code handles it as whole **paise** (`pricePaise: 49950`), through `paiseTransformer` on the column.
+- APIs accept and return rupees as a JSON number with at most 2 decimals. Convert with `rupeesToPaise` and `paiseToRupees`.
+- Never do money math in floating point (`price * 100`, `parseFloat`).
+
+## Database and migrations
+
+- Settings come from `TYPEORM_HOST`, `TYPEORM_PORT`, `TYPEORM_USERNAME`, `TYPEORM_PASSWORD` and `TYPEORM_DATABASE` via `readEnv()`. Outside production they default to the local Docker Postgres. In production a missing one stops the service.
+- List entities explicitly in `config/database.config.ts`. No `dist/**/*.entity` globs: the build bundles each app into one file.
+- Give every `@Column` an explicit `type`, and wrap relation properties in `Relation<T>`. The migration CLI runs through `tsx`, which does not emit decorator metadata.
+- Name constraints (`pk_products`, `uq_products_sku`, `fk_stock_product`, `chk_…`) so errors and schemas are readable.
+- Columns are `snake_case` (`@Column({ name: 'available_qty' })`), properties `camelCase`.
+- Generate a migration after changing an entity, read the SQL, run it, and commit both. Never edit a migration that has been run or committed.
+
+```bash
+npm run migration:generate:inventory -- apps/inventory-service/src/migrations/AddSomething
+npm run migration:run:inventory
+```
+
+## Logging and correlation IDs
+
+- Logs are JSON lines from pino, named after the service.
+- Each request gets a correlation ID from the `X-Correlation-Id` header, or a new UUID. It is returned in the same header, added to every log line of the request, and readable anywhere with `getCorrelationId()`.
+- Kafka consumers (Week 3) will restore it from the event envelope with `runWithCorrelationId()`.
+
+## Swagger
+
+Set up in Week 1 task 6, at `/docs`.
+
+- **Controllers:** `@ApiTags`, plus `@ApiOperation({ summary, description })` and one `@ApiResponse` per status code on every endpoint. Use the shared response helpers rather than repeating error descriptions.
+- **DTO fields:** `@ApiProperty` (or `@ApiPropertyOptional`) with a description and a realistic example.
+
+## Testing
+
+- Vitest. `npm test` runs unit tests (`*.spec.ts`); `npm run test:int` runs integration tests (`*.int-spec.ts`).
+- Tests live in `test/`, mirroring `src/`, and import code through relative `../src/...` paths.
+- The bar, taken from the team's code reviews:
+  - Coverage of services, repositories and utils of at least 80% lines, 70% branches and 75% functions. Modules, entities, DTOs and interfaces are excluded. Never exclude a file to pass.
+  - At least one controller test per endpoint.
+  - Edge cases are tested: empty lists, zero, missing rows, duplicates, limits.
+  - No `(service as any).privateMethod()`. Test through public methods.
+  - No skipped tests, and no open handles when the run ends.
+- Name tests as behaviour: `it('returns 404 when the product does not exist')`. Use `it.each` tables for many cases.
+
+## Code style
+
+- Prettier (same settings as `ams`): single quotes, trailing commas, width 100, 2 spaces. ESLint and Prettier run on staged files before each commit, followed by a full typecheck.
+- ESLint uses typescript-eslint's type-aware rules. Stricter than `ams`:
+  - `any` is not allowed;
+  - every promise must be awaited or handled;
+  - every class member says `public`, `private` or `protected` (constructors stay unmarked).
+- tsconfig is `strict`, plus `noUncheckedIndexedAccess`, `noImplicitOverride` and `noImplicitReturns`. Only `strictPropertyInitialization` is off, because DTOs and entities are filled in by libraries.
+- Comments explain why, not what.
+
+## Naming
+
+| Item              | Convention                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------------- |
+| Files             | `kebab-case` with a role suffix: `products.controller.ts`, `create-product.dto.ts`, `product.entity.ts` |
+| Classes           | `PascalCase` with the role: `ProductsService`, `CreateProductDto`, `ProductNotFoundException`           |
+| API paths         | `/api/v1/` plus plural `kebab-case` nouns: `/api/v1/products/:id/restock`                               |
+| DB tables/columns | `snake_case`                                                                                            |
+| Error codes       | `SCREAMING_SNAKE_CASE`                                                                                  |
+| Injection tokens  | `SCREAMING_SNAKE_CASE` symbols: `PRODUCT_REPOSITORY`                                                    |
+
+## Do not
+
+- Return a TypeORM entity from a controller.
+- Throw `HttpException` from a service, or an error code that is not in a catalog.
+- Use `any`, `parseFloat` on money, or floating-point money math.
+- Turn on TypeORM `synchronize`, or edit a migration that has already run.
+- Use entity globs, or `__dirname`.
+- Read-modify-write a counter (stock, balance). Use one conditional `UPDATE`.
+- Exclude a file from coverage to pass the threshold.

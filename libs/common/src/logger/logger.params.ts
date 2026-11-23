@@ -27,9 +27,7 @@ export function createLoggerParams(serviceName: string): Params {
       customAttributeKeys: { reqId: 'correlationId' },
       customLogLevel: levelForResponse,
       redact: ['req.headers.authorization', 'req.headers.cookie'],
-      transport: pretty
-        ? { target: 'pino-pretty', options: { singleLine: true } }
-        : undefined,
+      transport: pretty ? { target: 'pino-pretty', options: { singleLine: true } } : undefined,
     },
   };
 }

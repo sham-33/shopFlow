@@ -8,10 +8,7 @@ export interface ReadEnvOptions {
 }
 
 /** Reads a required environment variable. Throws if it is missing. */
-export function readEnv(
-  name: string,
-  { devDefault }: ReadEnvOptions = {},
-): string {
+export function readEnv(name: string, { devDefault }: ReadEnvOptions = {}): string {
   const value = process.env[name];
   if (value !== undefined && value !== '') {
     return value;

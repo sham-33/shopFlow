@@ -19,14 +19,14 @@ export class PaginationQueryDto implements PageRequest {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  page: number = 1;
+  public page: number = 1;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(MAX_PAGE_SIZE)
-  limit: number = DEFAULT_PAGE_SIZE;
+  public limit: number = DEFAULT_PAGE_SIZE;
 }
 
 export interface PageMeta {
@@ -42,11 +42,7 @@ export interface Page<T> {
   meta: PageMeta;
 }
 
-export function toPage<T>(
-  items: T[],
-  totalItems: number,
-  { page, limit }: PageRequest,
-): Page<T> {
+export function toPage<T>(items: T[], totalItems: number, { page, limit }: PageRequest): Page<T> {
   return {
     items,
     meta: {
