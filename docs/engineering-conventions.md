@@ -155,10 +155,13 @@ Do not throw Nest's `HttpException` from services, so the business rules stay fr
 
 ## Database and migrations
 
-- Settings come from `TYPEORM_HOST`, `TYPEORM_PORT`, `TYPEORM_USERNAME`, `TYPEORM_PASSWORD` and `TYPEORM_DATABASE` via `readEnv()`. Outside production they default to the local Docker Postgres. In production a missing one stops the service.
+- Each service's `config/database.config.ts` calls `createDatabaseConfig({ localDatabase, entities })` from `@app/common`. It reads `TYPEORM_HOST`, `TYPEORM_PORT`, `TYPEORM_USERNAME`, `TYPEORM_PASSWORD` and `TYPEORM_DATABASE` through `readEnv()`. Outside production they default to the local Docker Postgres. In production a missing one stops the service.
 - List entities explicitly in `config/database.config.ts`. No `dist/**/*.entity` globs: the build bundles each app into one file.
 - Give every `@Column` an explicit `type`, and wrap relation properties in `Relation<T>`. The migration CLI runs through `tsx`, which does not emit decorator metadata.
 - Name constraints (`pk_products`, `uq_products_sku`, `fk_stock_product`, `chk_…`) so errors and schemas are readable.
+- Store enum values (statuses, payment methods) in a `varchar` column limited by a CHECK built with `sqlIn()` from `@app/common`: `@Check('chk_orders_status', sqlIn('status', Object.values(OrderStatus)))`. Not Postgres enum types, which are awkward to change in a migration. The TypeScript enums live in `src/domain/enums.ts`; never rename a value.
+- A CHECK only rejects a row when its expression is false, and anything compared with NULL is NULL. On nullable columns, say `IS NOT NULL` explicitly: `"amount_off" IS NOT NULL AND "amount_off" > 0`.
+- Index every foreign-key column (`idx_order_items_order_id`); Postgres does not do it automatically.
 - Columns are `snake_case` (`@Column({ name: 'available_qty' })`), properties `camelCase`.
 - Generate a migration after changing an entity, read the SQL, run it, and commit both. Never edit a migration that has been run or committed.
 
@@ -192,7 +195,7 @@ npm run migration:run:inventory
 
 - `GET /health/live` returns 200 while the process runs. Kubernetes restarts the pod if it fails.
 - `GET /health/ready` returns 200 when every dependency the service needs answers within its timeout, and 503 otherwise. Kubernetes only sends traffic to ready pods.
-- Both sit outside `/api`, are left out of the request log, and live in `controllers/health.controller.ts` with `@nestjs/terminus`.
+- Both sit outside `/api` and are left out of the request log. Services with a database import `HealthModule` from `@app/common` after their `DatabaseModule`.
 - Readiness checks the database today. Add Kafka when the service starts using it (Week 3). Never put slow or optional dependencies in liveness: a failing liveness probe restarts the pod.
 
 ## Testing

@@ -3,8 +3,10 @@ import type {
   HealthCheckService,
   TypeOrmHealthIndicator,
 } from '@nestjs/terminus';
-import { READINESS_DATABASE_TIMEOUT_MS } from '../../src/constants.js';
-import { HealthController } from '../../src/controllers/health.controller.js';
+import {
+  HealthController,
+  READINESS_DATABASE_TIMEOUT_MS,
+} from '../../src/health/health.controller.js';
 
 const HEALTHY: HealthCheckResult = {
   status: 'ok',

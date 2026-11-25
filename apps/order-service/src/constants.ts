@@ -12,3 +12,13 @@ export const API_DOCS = {
   description:
     'Places orders, applies discounts and tracks each order from PENDING to CONFIRMED, CANCELLED or REFUNDED.',
 };
+
+// Database
+
+/** Database used outside production when TYPEORM_DATABASE is not set. */
+export const LOCAL_DATABASE = 'orders_db';
+
+// Orders
+
+/** Every order is in Indian rupees. */
+export const ORDER_CURRENCY = 'INR';

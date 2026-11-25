@@ -1,4 +1,3 @@
-import { ApiErrorResponse, COMMON_ERRORS } from '@app/common';
 import { Controller, Get, HttpStatus } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
@@ -7,7 +6,11 @@ import {
   HealthCheckService,
   TypeOrmHealthIndicator,
 } from '@nestjs/terminus';
-import { READINESS_DATABASE_TIMEOUT_MS } from '../constants.js';
+import { COMMON_ERRORS } from '../exceptions/common-errors.js';
+import { ApiErrorResponse } from '../swagger/api-error-response.decorator.js';
+
+/** Longest the readiness probe waits for the database before reporting it down. */
+export const READINESS_DATABASE_TIMEOUT_MS = 1500;
 
 /**
  * Kubernetes probes. Served at /health/live and /health/ready, outside the

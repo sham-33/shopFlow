@@ -95,7 +95,7 @@ Each service has its own REST APIs for its own data, its own database, and a sho
 | `orders`                              | `id` (uuid), `customer_id`, `status`, `subtotal`, `discount_amount`, `total_amount`, `currency`, `payment_method`, `coupon_code`, `cancel_reason`, `idempotency_key` (unique), `version`, `created_at`, `updated_at` |
 | `order_items`                         | `id`, `order_id`, `product_id`, `sku`, `product_name`, `quantity`, `unit_price`                                                                                                                                                    |
 | `order_status_history`                | `order_id`, `from_status`, `to_status`, `reason`, `changed_at` (a full audit trail)                                                                                                                                                    |
-| `coupons`                             | `code` (unique), `type` (PERCENTAGE, FLAT, BOGO), `value`, `min_order_amount`, `expires_at`, `active`                                                                                                                                |
+| `coupons`                             | `code` (unique), `type` (PERCENTAGE, FLAT, BOGO), `percent_off` (PERCENTAGE only), `amount_off` (FLAT only), `min_order_amount`, `expires_at`, `active`                                                                                                                                |
 | `product_catalog`                     | A **local read-only copy** of products (`product_id`, `sku`, `name`, `price`, `active`) kept up to date from `ProductUpdated` events                                                                                           |
 | `outbox_events`, `processed_events` | Reliability tables, explained in section 7                                                                                                                                                                                                       |
 
@@ -783,7 +783,7 @@ Goal: one service with clean REST APIs, running in Docker.
 
 Goal: orders can be placed and read, with correct totals.
 
-- [ ] Order entities: `orders`, `order_items`, `order_status_history`, `coupons`, `product_catalog`
+- [x] Order entities: `orders`, `order_items`, `order_status_history`, `coupons`, `product_catalog`
 - [ ] `OrderStateMachine` with full table-driven tests
 - [ ] Order APIs: create (with `Idempotency-Key`), get, list with filters, cancel
 - [ ] Coupon API and the 4 discount strategies with `DiscountStrategyFactory`

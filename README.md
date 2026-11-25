@@ -13,6 +13,7 @@ An event-driven e-commerce backend: three NestJS services (Order, Inventory, Pay
 npm install          # also installs the Git pre-commit hook
 npm run infra:up     # Postgres, Kafka, topic creation, AKHQ
 npm run migration:run:inventory
+npm run migration:run:order
 npm run start:dev    # inventory-service in watch mode
 ```
 
@@ -55,12 +56,12 @@ Errors always come back in the same shape: `statusCode`, `code` (a stable code s
 
 ## API docs and health checks
 
-| What         | Where                             | Notes                                                                  |
-| ------------ | --------------------------------- | ---------------------------------------------------------------------- |
-| Swagger UI   | http://localhost:3002/docs        | Try every endpoint in the browser; error codes are listed per endpoint |
-| OpenAPI JSON | http://localhost:3002/docs-json   | Import into Postman: File → Import → paste the URL                     |
-| Liveness     | `GET localhost:3002/health/live`  | 200 while the process runs                                             |
-| Readiness    | `GET localhost:3002/health/ready` | 200 when the database answers, 503 when it does not                    |
+| What         | Where                             | Notes                                                                                    |
+| ------------ | --------------------------------- | ---------------------------------------------------------------------------------------- |
+| Swagger UI   | http://localhost:3002/docs        | Try every endpoint in the browser; error codes are listed per endpoint. Order: port 3001 |
+| OpenAPI JSON | http://localhost:3002/docs-json   | Import into Postman: File → Import → paste the URL                                       |
+| Liveness     | `GET localhost:3002/health/live`  | 200 while the process runs                                                               |
+| Readiness    | `GET localhost:3002/health/ready` | 200 when the database answers, 503 when it does not. Order: port 3001                    |
 
 Swagger is on outside production. Set `SWAGGER_ENABLED=true` or `false` to override that.
 
@@ -69,8 +70,8 @@ Swagger is on outside production. Set `SWAGGER_ENABLED=true` or `false` to overr
 The schema changes only through TypeORM migrations; `synchronize` is off. Each service's migrations live in `apps/<service>/src/migrations/`.
 
 ```bash
-npm run migration:run:inventory       # apply pending migrations
-npm run migration:revert:inventory    # undo the last one
+npm run migration:run:inventory       # apply pending migrations (also :order)
+npm run migration:revert:inventory    # undo the last one (also :order)
 
 # after changing an entity, generate a migration from the difference:
 npm run migration:generate:inventory -- apps/inventory-service/src/migrations/AddSomething
