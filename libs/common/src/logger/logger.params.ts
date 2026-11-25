@@ -18,7 +18,8 @@ export function createLoggerParams(serviceName: string): Params {
   return {
     pinoHttp: {
       name: serviceName,
-      level: process.env.LOG_LEVEL ?? defaultLevel(),
+      // `||`, not `??`: an empty LOG_LEVEL must fall back too, because pino rejects ''.
+      level: process.env.LOG_LEVEL || defaultLevel(),
       genReqId: resolveCorrelationId,
       // Bind only the correlation ID to each request's log lines, not the
       // whole request object. The final "request completed" line still has

@@ -87,6 +87,7 @@ Services connect with `TYPEORM_HOST`, `TYPEORM_PORT`, `TYPEORM_USERNAME`, `TYPEO
 | `npm run format`     | Prettier on the whole repo                 |
 | `npm run typecheck`  | `tsc` over all apps, libs and tests        |
 | `npm test`           | Unit tests (`*.spec.ts`)                   |
+| `npm run test:cov`   | Unit tests with the coverage gate          |
 | `npm run test:int`   | Integration tests (`*.int-spec.ts`)        |
 | `npm run infra:down` | Stop the Docker stack (data is kept)       |
 

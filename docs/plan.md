@@ -777,7 +777,7 @@ Goal: one service with clean REST APIs, running in Docker.
 - [x] Inventory Service: `products`, `stock` entities and the first migration
 - [x] Product APIs (create, list, get, update, restock) with DTOs, mapper and repository interface
 - [x] Swagger at `/docs` and health checks
-- [ ] Unit tests for the product service and the exception filter
+- [x] Unit tests for the product service and the exception filter
 
 ### Week 2: Order Service APIs and discounts
 

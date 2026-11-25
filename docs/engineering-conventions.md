@@ -197,14 +197,23 @@ npm run migration:run:inventory
 
 ## Testing
 
-- Vitest. `npm test` runs unit tests (`*.spec.ts`); `npm run test:int` runs integration tests (`*.int-spec.ts`).
+- Vitest:
+  - `npm test` runs the unit tests (`*.spec.ts`).
+  - `npm run test:cov` runs them with the coverage gate.
+  - `npm run test:int` runs the integration tests (`*.int-spec.ts`).
 - Tests live in `test/`, mirroring `src/`, and import code through relative `../src/...` paths.
-- The bar, taken from the team's code reviews:
-  - Coverage of services, repositories and utils of at least 80% lines, 70% branches and 75% functions. Modules, entities, DTOs and interfaces are excluded. Never exclude a file to pass.
-  - At least one controller test per endpoint.
-  - Edge cases are tested: empty lists, zero, missing rows, duplicates, limits.
+- The bar, taken from the team's code reviews. `npm run test:cov` fails below it:
+  - At least 80% lines and statements, 70% branches and 75% functions.
+  - Coverage counts everything in `apps/*/src` and `libs/*/src` except wiring and declarations: `main.ts`, modules, entities, DTOs, constants and migrations. The TypeORM repository classes are also excluded; integration tests cover them against real Postgres. Never exclude a file just to pass.
+  - At least one controller test per endpoint, covering success and each documented error status.
+  - Edge cases are tested: empty lists, zero and falsy values, missing rows, duplicates, limits.
   - No `(service as any).privateMethod()`. Test through public methods.
-  - No skipped tests, and no open handles when the run ends.
+  - No skipped or `.only` tests, and no open handles when the run ends.
+- How the tests are written:
+  - **Services:** construct the service directly with a mocked repository: `vi.fn<ProductRepository['findById']>()`, typed with `Mocked<ProductRepository>`.
+  - **Controllers:** run the real HTTP stack with `setupApp()` and supertest, mocking only the service. Routing, the `/api/v1` prefix, trimming, validation, `ParseIdPipe` and the error filter are then tested for real.
+  - **Test data:** builders in `test/builders/`, for example `aProduct({ active: false }, { availableQty: 0 })`.
+  - **Environment variables:** set them with `vi.stubEnv()` and undo with `vi.unstubAllEnvs()`. Never assign to `process.env`.
 - Name tests as behaviour: `it('returns 404 when the product does not exist')`. Use `it.each` tables for many cases.
 
 ## Code style
