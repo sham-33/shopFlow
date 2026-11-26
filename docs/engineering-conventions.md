@@ -26,6 +26,7 @@ apps/<service>/
 │   ├── constants/errors.ts   # ERRORS: every error code this service returns
 │   ├── controllers/          # HTTP only
 │   ├── services/             # business rules
+│   ├── domain/               # enums, state machines, strategies: pure rules, no HTTP or database
 │   ├── repository/           # <name>.repository.ts (interface + token), typeorm-<name>.repository.ts
 │   ├── entities/             # TypeORM tables
 │   ├── dto/                  # request and response classes

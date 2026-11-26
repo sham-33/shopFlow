@@ -784,7 +784,7 @@ Goal: one service with clean REST APIs, running in Docker.
 Goal: orders can be placed and read, with correct totals.
 
 - [x] Order entities: `orders`, `order_items`, `order_status_history`, `coupons`, `product_catalog`
-- [ ] `OrderStateMachine` with full table-driven tests
+- [x] `OrderStateMachine` with full table-driven tests
 - [ ] Order APIs: create (with `Idempotency-Key`), get, list with filters, cancel
 - [ ] Coupon API and the 4 discount strategies with `DiscountStrategyFactory`
 - [ ] Money handled safely (no floating-point totals)
