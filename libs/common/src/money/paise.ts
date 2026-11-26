@@ -70,3 +70,20 @@ export const paiseTransformer = {
     return value === null ? null : decimalToPaise(value);
   },
 };
+
+/**
+ * `percent`% of an amount in paise, rounded to the nearest paisa (half a
+ * paisa rounds up). Integer arithmetic only: 12.5% of 199 paise is 25, never
+ * 24.874999….
+ */
+export function percentOfPaise(paise: number, percent: number): number {
+  if (!Number.isSafeInteger(paise) || paise < 0) {
+    throw new RangeError(`Paise must be a whole number of at least 0, got ${paise}`);
+  }
+  if (!Number.isInteger(percent) || percent < 0 || percent > 100) {
+    throw new RangeError(`Percent must be a whole number from 0 to 100, got ${percent}`);
+  }
+  const hundredths = paise * percent;
+  const remainder = hundredths % 100;
+  return (hundredths - remainder) / 100 + (remainder >= 50 ? 1 : 0);
+}

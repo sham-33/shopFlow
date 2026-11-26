@@ -49,3 +49,9 @@ export const STATUS_CHANGE_REASONS = {
   PLACED: 'Order placed',
   CANCELLED_BY_CUSTOMER: 'Cancelled by the customer',
 } as const;
+
+// Coupons
+
+/** Coupon codes: 3–20 upper-case letters and digits, for example SAVE10. */
+export const COUPON_CODE_PATTERN = /^[A-Z0-9]{3,20}$/;
+export const COUPON_CODE_PATTERN_MESSAGE = 'couponCode must be 3-20 letters and digits';

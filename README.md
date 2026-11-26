@@ -75,8 +75,19 @@ Runs on port 3001 (`npm run start:dev -- order-service`). Prices come from the o
 | `GET /api/v1/orders?customerId=&status=&page=&limit=` | List orders, newest first                                   |
 | `GET /api/v1/orders/:id`                              | One order with its lines and status history                 |
 | `POST /api/v1/orders/:id/cancel`                      | Cancel a PENDING, AWAITING_PAYMENT or CONFIRMED order (202) |
+| `POST /api/v1/coupons`                                | Create a discount code (admin)                              |
 
 Send a new `Idempotency-Key` (for example a UUID) with each order. Repeating a request with the same key returns the first order with an `Idempotent-Replayed: true` header; using the key for a different order returns 409 `IDEMPOTENCY_KEY_REUSED`.
+
+Orders take an optional `couponCode`, matched without regard to case. Three coupon types exist:
+
+| Type         | Create with                                             | Discount                                              |
+| ------------ | ------------------------------------------------------- | ----------------------------------------------------- |
+| `PERCENTAGE` | `{"code":"SAVE10","type":"PERCENTAGE","percentOff":10}` | That percentage of the subtotal, to the nearest paisa |
+| `FLAT`       | `{"code":"FLAT100","type":"FLAT","amountOff":100}`      | That many rupees, never more than the subtotal        |
+| `BOGO`       | `{"code":"BOGO","type":"BOGO"}`                         | Every second unit of each line is free                |
+
+Any coupon can also take `minOrderAmount` (rupees) and `expiresAt`. A coupon that does not exist, is inactive, has expired or is below its minimum returns 422 `INVALID_COUPON`, with the cause in `details.reason`.
 
 Until Week 3 fills `product_catalog` from Kafka, add products to it by hand (`docker compose exec postgres psql -U shopflow -d orders_db`):
 

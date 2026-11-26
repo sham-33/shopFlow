@@ -6,8 +6,10 @@ import type { App } from 'supertest/types.js';
 import type { Mocked } from 'vitest';
 import { API_DOCS } from '../../src/constants.js';
 import { OrdersController } from '../../src/controllers/orders.controller.js';
+import { CouponRejection } from '../../src/domain/coupon-rules.js';
 import { OrderStatus, PaymentMethod } from '../../src/domain/enums.js';
 import { IdempotencyKeyReusedException } from '../../src/exceptions/idempotency-key-reused.exception.js';
+import { InvalidCouponException } from '../../src/exceptions/invalid-coupon.exception.js';
 import { InvalidOrderStateException } from '../../src/exceptions/invalid-order-state.exception.js';
 import { OrderChangedConcurrentlyException } from '../../src/exceptions/order-changed-concurrently.exception.js';
 import { OrderNotFoundException } from '../../src/exceptions/order-not-found.exception.js';
@@ -110,9 +112,31 @@ describe('OrdersController', () => {
       expect(service.place).toHaveBeenCalledWith({
         ...VALID_BODY,
         paymentMethod: PaymentMethod.WALLET,
+        couponCode: null,
         idempotencyKey: IDEMPOTENCY_KEY,
       });
       expect(res.get('Idempotent-Replayed')).toBeUndefined();
+    });
+
+    it('passes a coupon code on in upper case, trimmed', async () => {
+      service.place.mockResolvedValue({ order: anOrder(), replayed: false });
+
+      await placeOrder({ ...VALID_BODY, couponCode: '  save10 ' }).expect(201);
+
+      expect(service.place).toHaveBeenCalledWith(expect.objectContaining({ couponCode: 'SAVE10' }));
+    });
+
+    it('returns 422 INVALID_COUPON with the reason when the coupon cannot be used', async () => {
+      service.place.mockRejectedValue(
+        new InvalidCouponException('SAVE10', CouponRejection.EXPIRED),
+      );
+
+      const res = await placeOrder({ ...VALID_BODY, couponCode: 'SAVE10' }).expect(422);
+
+      expect(res.body).toMatchObject({
+        code: 'INVALID_COUPON',
+        details: { couponCode: 'SAVE10', reason: 'EXPIRED' },
+      });
     });
 
     it('marks a repeated request with Idempotent-Replayed: true', async () => {
@@ -158,6 +182,8 @@ describe('OrdersController', () => {
       ['an unknown payment method', { ...VALID_BODY, paymentMethod: 'CASH' }],
       ['a customer ID that is not a UUID', { ...VALID_BODY, customerId: '42' }],
       ['a price sent by the client', { ...VALID_BODY, total: 1 }],
+      ['a coupon code with a dash', { ...VALID_BODY, couponCode: 'SAVE-10' }],
+      ['a 2-letter coupon code', { ...VALID_BODY, couponCode: 'AB' }],
       [
         '51 lines',
         {

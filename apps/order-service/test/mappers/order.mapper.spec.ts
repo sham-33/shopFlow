@@ -22,6 +22,7 @@ describe('order mapper', () => {
       customerId: CUSTOMER_ID,
       paymentMethod: PaymentMethod.UPI,
       items: [{ productId: SHIRT_ID, quantity: 3 }],
+      couponCode: null,
       idempotencyKey: IDEMPOTENCY_KEY,
     });
   });

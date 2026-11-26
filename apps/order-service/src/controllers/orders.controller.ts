@@ -43,7 +43,7 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Place an order',
     description:
-      'Saves a PENDING order priced from the local product catalog. Send a unique Idempotency-Key with each new order: repeating a request with the same key returns the first order (with Idempotent-Replayed: true) instead of creating another.',
+      'Saves a PENDING order priced from the local product catalog, with an optional coupon. Send a unique Idempotency-Key with each new order: repeating a request with the same key returns the first order (with Idempotent-Replayed: true) instead of creating another.',
   })
   @ApiHeader({
     name: IDEMPOTENCY_KEY_HEADER,
@@ -67,6 +67,7 @@ export class OrdersController {
     HttpStatus.UNPROCESSABLE_ENTITY,
     ERRORS.UNKNOWN_PRODUCTS,
     ERRORS.INACTIVE_PRODUCTS,
+    ERRORS.INVALID_COUPON,
     ERRORS.ORDER_TOTAL_TOO_LARGE,
   )
   @Post()

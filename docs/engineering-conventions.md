@@ -25,7 +25,7 @@ apps/<service>/
 │   ├── constants.ts          # fixed values: port, service name, limits, timeouts
 │   ├── constants/errors.ts   # ERRORS: every error code this service returns
 │   ├── controllers/          # HTTP only
-│   ├── decorators/           # custom parameter decorators, e.g. @IdempotencyKey()
+│   ├── decorators/           # custom parameter and validation decorators, e.g. @IdempotencyKey()
 │   ├── services/             # business rules
 │   ├── domain/               # enums, state machines, strategies: pure rules, no HTTP or database
 │   ├── repository/           # <name>.repository.ts (interface + token), typeorm-<name>.repository.ts

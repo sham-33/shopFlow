@@ -25,6 +25,16 @@ export const ERRORS = {
     kind: 'conflict',
     message: 'This Idempotency-Key was already used for a different order',
   },
+  INVALID_COUPON: {
+    code: 'INVALID_COUPON',
+    kind: 'unprocessable',
+    message: 'The coupon cannot be used for this order',
+  },
+  DUPLICATE_COUPON: {
+    code: 'DUPLICATE_COUPON',
+    kind: 'conflict',
+    message: 'A coupon with this code already exists',
+  },
   UNKNOWN_PRODUCTS: {
     code: 'UNKNOWN_PRODUCTS',
     kind: 'unprocessable',

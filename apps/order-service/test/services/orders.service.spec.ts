@@ -1,14 +1,18 @@
 import type { Mocked } from 'vitest';
-import { CancelReason, OrderStatus, PaymentMethod } from '../../src/domain/enums.js';
+import { CouponRejection } from '../../src/domain/coupon-rules.js';
+import { DiscountStrategyFactory } from '../../src/domain/discounts/discount-strategy.factory.js';
+import { CancelReason, CouponType, OrderStatus, PaymentMethod } from '../../src/domain/enums.js';
 import { OrderStateMachine } from '../../src/domain/order-state-machine.js';
 import { IdempotencyKeyReusedException } from '../../src/exceptions/idempotency-key-reused.exception.js';
 import { InactiveProductsException } from '../../src/exceptions/inactive-products.exception.js';
+import { InvalidCouponException } from '../../src/exceptions/invalid-coupon.exception.js';
 import { InvalidOrderStateException } from '../../src/exceptions/invalid-order-state.exception.js';
 import { OrderChangedConcurrentlyException } from '../../src/exceptions/order-changed-concurrently.exception.js';
 import { OrderNotFoundException } from '../../src/exceptions/order-not-found.exception.js';
 import { OrderTotalTooLargeException } from '../../src/exceptions/order-total-too-large.exception.js';
 import { UnknownProductsException } from '../../src/exceptions/unknown-products.exception.js';
 import type { CatalogRepository } from '../../src/repository/catalog.repository.js';
+import type { CouponRepository } from '../../src/repository/coupon.repository.js';
 import type { OrderRepository } from '../../src/repository/order.repository.js';
 import { OrdersService, type PlaceOrder } from '../../src/services/orders.service.js';
 import {
@@ -21,6 +25,7 @@ import {
   anOrder,
   anOrderItem,
 } from '../builders/order.builder.js';
+import { aCoupon } from '../builders/coupon.builder.js';
 
 const MUG = aCatalogProduct({
   productId: MUG_ID,
@@ -34,6 +39,7 @@ function request(overrides: Partial<PlaceOrder> = {}): PlaceOrder {
     customerId: CUSTOMER_ID,
     paymentMethod: PaymentMethod.WALLET,
     items: [{ productId: SHIRT_ID, quantity: 2 }],
+    couponCode: null,
     idempotencyKey: IDEMPOTENCY_KEY,
     ...overrides,
   };
@@ -42,6 +48,7 @@ function request(overrides: Partial<PlaceOrder> = {}): PlaceOrder {
 describe('OrdersService', () => {
   let orders: Mocked<OrderRepository>;
   let catalog: Mocked<CatalogRepository>;
+  let coupons: Mocked<CouponRepository>;
   let service: OrdersService;
 
   beforeEach(() => {
@@ -53,9 +60,19 @@ describe('OrdersService', () => {
       changeStatus: vi.fn<OrderRepository['changeStatus']>(),
     };
     catalog = { findByIds: vi.fn<CatalogRepository['findByIds']>() };
+    coupons = {
+      findByCode: vi.fn<CouponRepository['findByCode']>(),
+      insert: vi.fn<CouponRepository['insert']>(),
+    };
     orders.findByIdempotencyKey.mockResolvedValue(null);
     catalog.findByIds.mockResolvedValue([aCatalogProduct(), MUG]);
-    service = new OrdersService(orders, catalog, new OrderStateMachine());
+    service = new OrdersService(
+      orders,
+      catalog,
+      coupons,
+      new OrderStateMachine(),
+      new DiscountStrategyFactory(),
+    );
   });
 
   describe('place', () => {
@@ -164,6 +181,7 @@ describe('OrdersService', () => {
         ['another customer', { customerId: '99999999-9999-4999-8999-999999999999' }],
         ['another payment method', { paymentMethod: PaymentMethod.CARD }],
         ['another quantity', { items: [{ productId: SHIRT_ID, quantity: 3 }] }],
+        ['a coupon', { couponCode: 'SAVE10' }],
         [
           'an extra product',
           {
@@ -215,6 +233,100 @@ describe('OrdersService', () => {
         await expect(service.place(request())).rejects.toThrow(
           `Insert reported the Idempotency-Key ${IDEMPOTENCY_KEY} as taken, but no order has it`,
         );
+      });
+    });
+
+    describe('coupons', () => {
+      const NOW = new Date('2026-11-26T12:00:00.000Z');
+
+      beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(NOW);
+      });
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      it('takes the coupon discount off the subtotal and stores the code', async () => {
+        coupons.findByCode.mockResolvedValue(aCoupon());
+
+        const { order } = await service.place(request({ couponCode: 'SAVE10' }));
+
+        // 10% of ₹999 is ₹99.90.
+        expect(order).toMatchObject({
+          subtotalPaise: 99900,
+          discountPaise: 9990,
+          totalPaise: 89910,
+          couponCode: 'SAVE10',
+        });
+        expect(coupons.findByCode).toHaveBeenCalledWith('SAVE10');
+      });
+
+      it.each([
+        ['PERCENTAGE 10%', { type: CouponType.PERCENTAGE, percentOff: 10 }, 9990],
+        ['FLAT ₹100', { type: CouponType.FLAT, percentOff: null, amountOffPaise: 10000 }, 10000],
+        // 2 shirts: the second is free.
+        ['BOGO', { type: CouponType.BOGO, percentOff: null }, 49950],
+      ] as const)('uses the strategy for a %s coupon', async (_case, terms, discountPaise) => {
+        coupons.findByCode.mockResolvedValue(aCoupon(terms));
+
+        const { order } = await service.place(request({ couponCode: 'SAVE10' }));
+
+        expect(order.discountPaise).toBe(discountPaise);
+        expect(order.totalPaise).toBe(99900 - discountPaise);
+      });
+
+      it('never lets a FLAT coupon push the total below zero', async () => {
+        coupons.findByCode.mockResolvedValue(
+          aCoupon({ type: CouponType.FLAT, percentOff: null, amountOffPaise: 500000 }),
+        );
+
+        const { order } = await service.place(request({ couponCode: 'SAVE10' }));
+
+        expect(order).toMatchObject({ discountPaise: 99900, totalPaise: 0 });
+      });
+
+      it.each([
+        ['does not exist', null, CouponRejection.NOT_FOUND],
+        ['is inactive', aCoupon({ active: false }), CouponRejection.INACTIVE],
+        [
+          'has expired',
+          aCoupon({ expiresAt: new Date('2026-11-26T11:59:59.999Z') }),
+          CouponRejection.EXPIRED,
+        ],
+        [
+          'needs a larger order',
+          aCoupon({ minOrderPaise: 100000 }),
+          CouponRejection.MIN_ORDER_NOT_MET,
+        ],
+      ])('rejects a coupon that %s with INVALID_COUPON', async (_case, coupon, reason) => {
+        coupons.findByCode.mockResolvedValue(coupon);
+
+        const placed = service.place(request({ couponCode: 'SAVE10' }));
+
+        await expect(placed).rejects.toBeInstanceOf(InvalidCouponException);
+        await expect(placed).rejects.toMatchObject({
+          code: 'INVALID_COUPON',
+          details: { couponCode: 'SAVE10', reason },
+        });
+        expect(orders.insert).not.toHaveBeenCalled();
+      });
+
+      it('does not look up coupons for an order without one', async () => {
+        const { order } = await service.place(request());
+
+        expect(coupons.findByCode).not.toHaveBeenCalled();
+        expect(order).toMatchObject({ discountPaise: 0, totalPaise: 99900, couponCode: null });
+      });
+
+      it('replays an earlier order placed with the same coupon', async () => {
+        orders.findByIdempotencyKey.mockResolvedValue(anOrder({ couponCode: 'SAVE10' }));
+
+        const { replayed } = await service.place(request({ couponCode: 'SAVE10' }));
+
+        expect(replayed).toBe(true);
+        expect(coupons.findByCode).not.toHaveBeenCalled();
       });
     });
 

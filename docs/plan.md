@@ -786,9 +786,9 @@ Goal: orders can be placed and read, with correct totals.
 - [x] Order entities: `orders`, `order_items`, `order_status_history`, `coupons`, `product_catalog`
 - [x] `OrderStateMachine` with full table-driven tests
 - [x] Order APIs: create (with `Idempotency-Key`), get, list with filters, cancel
-- [ ] Coupon API and the 4 discount strategies with `DiscountStrategyFactory`
-- [ ] Money handled safely (no floating-point totals)
-- [ ] Unit tests for `OrdersService` and every discount strategy
+- [x] Coupon API and the 4 discount strategies with `DiscountStrategyFactory`
+- [x] Money handled safely (no floating-point totals)
+- [x] Unit tests for `OrdersService` and every discount strategy
 
 ### Week 3: Kafka messaging library and the first events
 

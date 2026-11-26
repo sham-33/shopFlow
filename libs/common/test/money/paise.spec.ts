@@ -3,6 +3,7 @@ import {
   paiseToDecimal,
   paiseToRupees,
   paiseTransformer,
+  percentOfPaise,
   rupeesToPaise,
 } from '../../src/money/paise.js';
 
@@ -94,5 +95,36 @@ describe('paiseToRupees', () => {
 
   it('rejects a fractional number of paise', () => {
     expect(() => paiseToRupees(1.5)).toThrow(RangeError);
+  });
+});
+
+describe('percentOfPaise', () => {
+  it.each([
+    [10000, 10, 1000],
+    [99900, 10, 9990],
+    // 10% of ₹19.99 is 199.9 paise: rounds up to 200.
+    [1999, 10, 200],
+    // 10% of ₹19.94 is 199.4 paise: rounds down to 199.
+    [1994, 10, 199],
+    // Exactly half a paisa rounds up.
+    [5, 10, 1],
+    [4, 10, 0],
+    [12345, 100, 12345],
+    [12345, 0, 0],
+    [0, 50, 0],
+    // The largest order total: 33% is 329,999,999,999.67 paise, which rounds up.
+    [999_999_999_999, 33, 330_000_000_000],
+  ])('%i paise × %i%% = %i paise', (paise, percent, expected) => {
+    expect(percentOfPaise(paise, percent)).toBe(expected);
+  });
+
+  it.each([
+    ['a fraction of a paisa', 1.5, 10],
+    ['negative paise', -100, 10],
+    ['a fractional percent', 100, 12.5],
+    ['a percent above 100', 100, 101],
+    ['a negative percent', 100, -1],
+  ])('rejects %s', (_case, paise, percent) => {
+    expect(() => percentOfPaise(paise, percent)).toThrow(RangeError);
   });
 });

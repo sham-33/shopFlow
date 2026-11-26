@@ -19,6 +19,7 @@ export function toPlaceOrder(dto: PlaceOrderDto, idempotencyKey: string): PlaceO
     customerId: dto.customerId,
     paymentMethod: dto.paymentMethod,
     items: dto.items.map(({ productId, quantity }) => ({ productId, quantity })),
+    couponCode: dto.couponCode ?? null,
     idempotencyKey,
   };
 }

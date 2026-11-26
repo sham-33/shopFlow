@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -7,13 +7,22 @@ import {
   IsArray,
   IsEnum,
   IsInt,
+  IsOptional,
+  IsString,
   IsUUID,
+  Matches,
   Max,
   Min,
   ValidateNested,
 } from 'class-validator';
-import { MAX_ITEMS_PER_ORDER, MAX_QUANTITY_PER_ITEM } from '../constants.js';
+import {
+  COUPON_CODE_PATTERN,
+  COUPON_CODE_PATTERN_MESSAGE,
+  MAX_ITEMS_PER_ORDER,
+  MAX_QUANTITY_PER_ITEM,
+} from '../constants.js';
 import { PaymentMethod } from '../domain/enums.js';
+import { toUpperCase } from './transforms.js';
 
 export class OrderLineDto {
   @ApiProperty({ format: 'uuid', example: '33444446-505d-4aaf-b42a-5cbc575a9783' })
@@ -57,4 +66,15 @@ export class PlaceOrderDto {
   @ValidateNested({ each: true })
   @Type(() => OrderLineDto)
   public items: OrderLineDto[];
+
+  @ApiPropertyOptional({
+    description: 'A coupon to apply. Matched without regard to case.',
+    example: 'SAVE10',
+    pattern: COUPON_CODE_PATTERN.source,
+  })
+  @IsOptional()
+  @Transform(toUpperCase)
+  @IsString()
+  @Matches(COUPON_CODE_PATTERN, { message: COUPON_CODE_PATTERN_MESSAGE })
+  public couponCode?: string;
 }

@@ -1,19 +1,24 @@
 import { type Page, type PageRequest, toPage } from '@app/common';
 import { Inject, Injectable } from '@nestjs/common';
 import { ORDER_CURRENCY, STATUS_CHANGE_REASONS } from '../constants.js';
+import { couponRejection, CouponRejection } from '../domain/coupon-rules.js';
+import { DiscountStrategyFactory } from '../domain/discounts/discount-strategy.factory.js';
 import { CancelReason, OrderStatus, type PaymentMethod } from '../domain/enums.js';
 import { calculateSubtotal } from '../domain/order-pricing.js';
 import { OrderStateMachine } from '../domain/order-state-machine.js';
 import type { CatalogProduct } from '../entities/catalog-product.entity.js';
+import type { Coupon } from '../entities/coupon.entity.js';
 import { OrderItem } from '../entities/order-item.entity.js';
 import { OrderStatusHistory } from '../entities/order-status-history.entity.js';
 import { Order } from '../entities/order.entity.js';
 import { IdempotencyKeyReusedException } from '../exceptions/idempotency-key-reused.exception.js';
 import { InactiveProductsException } from '../exceptions/inactive-products.exception.js';
+import { InvalidCouponException } from '../exceptions/invalid-coupon.exception.js';
 import { OrderChangedConcurrentlyException } from '../exceptions/order-changed-concurrently.exception.js';
 import { OrderNotFoundException } from '../exceptions/order-not-found.exception.js';
 import { UnknownProductsException } from '../exceptions/unknown-products.exception.js';
 import { CATALOG_REPOSITORY, type CatalogRepository } from '../repository/catalog.repository.js';
+import { COUPON_REPOSITORY, type CouponRepository } from '../repository/coupon.repository.js';
 import {
   ORDER_REPOSITORY,
   type OrderFilter,
@@ -30,6 +35,8 @@ export interface PlaceOrder {
   customerId: string;
   paymentMethod: PaymentMethod;
   items: OrderLine[];
+  /** Upper case, or null for no coupon. */
+  couponCode: string | null;
   /** The client's Idempotency-Key: placing the same request twice returns the first order. */
   idempotencyKey: string;
 }
@@ -42,20 +49,22 @@ export interface PlacedOrder {
 
 /**
  * Business rules for orders. Knows nothing about HTTP; works with money in
- * paise. Discounts arrive with coupons (Week 2, task 4) and events with the
- * outbox (Week 3).
+ * paise. Events arrive with the outbox in Week 3.
  */
 @Injectable()
 export class OrdersService {
   constructor(
     @Inject(ORDER_REPOSITORY) private readonly orders: OrderRepository,
     @Inject(CATALOG_REPOSITORY) private readonly catalog: CatalogRepository,
+    @Inject(COUPON_REPOSITORY) private readonly coupons: CouponRepository,
     private readonly stateMachine: OrderStateMachine,
+    private readonly discounts: DiscountStrategyFactory,
   ) {}
 
   /**
-   * Places a PENDING order, priced from the local product catalog. Safe to
-   * retry: the same Idempotency-Key returns the first order instead of a new one.
+   * Places a PENDING order, priced from the local product catalog, with an
+   * optional coupon. Safe to retry: the same Idempotency-Key returns the first
+   * order instead of a new one.
    */
   public async place(request: PlaceOrder): Promise<PlacedOrder> {
     const earlier = await this.orders.findByIdempotencyKey(request.idempotencyKey);
@@ -137,16 +146,20 @@ export class OrdersService {
       toOrderItem(products.get(productId) as CatalogProduct, quantity),
     );
     const subtotalPaise = calculateSubtotal(items);
+    const coupon = await this.usableCoupon(request.couponCode, subtotalPaise);
+    const discountPaise = this.discounts
+      .forCoupon(coupon)
+      .discountFor(subtotalPaise, items, coupon);
 
     return Object.assign(new Order(), {
       customerId: request.customerId,
       status: OrderStatus.PENDING,
       subtotalPaise,
-      discountPaise: 0,
-      totalPaise: subtotalPaise,
+      discountPaise,
+      totalPaise: subtotalPaise - discountPaise,
       currency: ORDER_CURRENCY,
       paymentMethod: request.paymentMethod,
-      couponCode: null,
+      couponCode: coupon?.code ?? null,
       cancelReason: null,
       idempotencyKey: request.idempotencyKey,
       items,
@@ -158,6 +171,22 @@ export class OrdersService {
         }),
       ],
     });
+  }
+
+  /** The coupon for this code if it can be used on this subtotal now; null for no code. */
+  private async usableCoupon(code: string | null, subtotalPaise: number): Promise<Coupon | null> {
+    if (code === null) {
+      return null;
+    }
+    const coupon = await this.coupons.findByCode(code);
+    if (!coupon) {
+      throw new InvalidCouponException(code, CouponRejection.NOT_FOUND);
+    }
+    const rejection = couponRejection(coupon, subtotalPaise, new Date());
+    if (rejection) {
+      throw new InvalidCouponException(code, rejection);
+    }
+    return coupon;
   }
 }
 
@@ -172,7 +201,7 @@ function toOrderItem(product: CatalogProduct, quantity: number): OrderItem {
   });
 }
 
-/** Same customer, payment method and product quantities, ignoring the order of the lines. */
+/** Same customer, payment method, coupon and product quantities, ignoring the order of the lines. */
 function isSameRequest(existing: Order, request: PlaceOrder): boolean {
   const lines = (items: readonly OrderLine[]): string =>
     items
@@ -182,6 +211,7 @@ function isSameRequest(existing: Order, request: PlaceOrder): boolean {
   return (
     existing.customerId === request.customerId &&
     existing.paymentMethod === request.paymentMethod &&
+    existing.couponCode === request.couponCode &&
     lines(existing.items ?? []) === lines(request.items)
   );
 }
