@@ -561,7 +561,7 @@ WHERE product_id = $2
 
 If the statement changes 0 rows, there was not enough stock. Postgres runs this safely even when many requests come in at once. Do this for every item of the order inside one transaction. If any item returns 0 rows, roll back the whole transaction and publish `StockReservationFailed`.
 
-**Optimistic locking for other rows:** add `@VersionColumn()` to `orders` and `wallets`. TypeORM then adds `WHERE version = :old` to every update. If two updates clash, one fails with `OptimisticLockVersionMismatchError`, and that message goes to the retry topic.
+**Optimistic locking for other rows:** add `@VersionColumn()` to `orders` and `wallets`, and change them with one conditional update: `UPDATE orders SET …, version = version + 1 WHERE id = :id AND version = :old`. TypeORM's `save()` increments the version but does not check it, so the condition must be written explicitly. If the update changes no row, someone else got there first: an HTTP request fails with 409 `ORDER_CHANGED_CONCURRENTLY`, and an event handler sends the message to the retry topic.
 
 Be ready to explain both: the single conditional `UPDATE` is best for counters like stock; version columns are best for whole rows like an order.
 
@@ -785,7 +785,7 @@ Goal: orders can be placed and read, with correct totals.
 
 - [x] Order entities: `orders`, `order_items`, `order_status_history`, `coupons`, `product_catalog`
 - [x] `OrderStateMachine` with full table-driven tests
-- [ ] Order APIs: create (with `Idempotency-Key`), get, list with filters, cancel
+- [x] Order APIs: create (with `Idempotency-Key`), get, list with filters, cancel
 - [ ] Coupon API and the 4 discount strategies with `DiscountStrategyFactory`
 - [ ] Money handled safely (no floating-point totals)
 - [ ] Unit tests for `OrdersService` and every discount strategy

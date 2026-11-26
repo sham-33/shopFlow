@@ -3,6 +3,7 @@ export * from './config/env.js';
 export * from './correlation/correlation-id.js';
 export * from './correlation/correlation-id.middleware.js';
 export * from './database/database-config.js';
+export * from './database/postgres-errors.js';
 export * from './database/sql.js';
 export * from './exceptions/all-exceptions.filter.js';
 export * from './exceptions/common-errors.js';

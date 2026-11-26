@@ -65,6 +65,33 @@ Errors always come back in the same shape: `statusCode`, `code` (a stable code s
 
 Swagger is on outside production. Set `SWAGGER_ENABLED=true` or `false` to override that.
 
+## Order API
+
+Runs on port 3001 (`npm run start:dev -- order-service`). Prices come from the order service's own product catalog, never from the client.
+
+| Method and path                                       | What it does                                                |
+| ----------------------------------------------------- | ----------------------------------------------------------- |
+| `POST /api/v1/orders`                                 | Place an order. Needs an `Idempotency-Key` header           |
+| `GET /api/v1/orders?customerId=&status=&page=&limit=` | List orders, newest first                                   |
+| `GET /api/v1/orders/:id`                              | One order with its lines and status history                 |
+| `POST /api/v1/orders/:id/cancel`                      | Cancel a PENDING, AWAITING_PAYMENT or CONFIRMED order (202) |
+
+Send a new `Idempotency-Key` (for example a UUID) with each order. Repeating a request with the same key returns the first order with an `Idempotent-Replayed: true` header; using the key for a different order returns 409 `IDEMPOTENCY_KEY_REUSED`.
+
+Until Week 3 fills `product_catalog` from Kafka, add products to it by hand (`docker compose exec postgres psql -U shopflow -d orders_db`):
+
+```sql
+INSERT INTO product_catalog (product_id, sku, name, price, active)
+VALUES ('a1000000-0000-4000-8000-000000000001', 'TSHIRT-RED-M', 'Red T-shirt (M)', 499.50, true);
+```
+
+```bash
+curl -X POST localhost:3001/api/v1/orders \
+  -H 'content-type: application/json' \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{"customerId":"11111111-1111-4111-8111-111111111111","paymentMethod":"WALLET","items":[{"productId":"a1000000-0000-4000-8000-000000000001","quantity":2}]}'
+```
+
 ## Database migrations
 
 The schema changes only through TypeORM migrations; `synchronize` is off. Each service's migrations live in `apps/<service>/src/migrations/`.

@@ -25,6 +25,7 @@ apps/<service>/
 │   ├── constants.ts          # fixed values: port, service name, limits, timeouts
 │   ├── constants/errors.ts   # ERRORS: every error code this service returns
 │   ├── controllers/          # HTTP only
+│   ├── decorators/           # custom parameter decorators, e.g. @IdempotencyKey()
 │   ├── services/             # business rules
 │   ├── domain/               # enums, state machines, strategies: pure rules, no HTTP or database
 │   ├── repository/           # <name>.repository.ts (interface + token), typeorm-<name>.repository.ts
@@ -143,7 +144,8 @@ Do not throw Nest's `HttpException` from services, so the business rules stay fr
   ```
   The module binds the token: `{ provide: PRODUCT_REPOSITORY, useClass: TypeOrmProductRepository }`.
 - Every repository method takes an optional `EntityManager`, so a caller can put several calls (and an outbox event) in one transaction: `dataSource.transaction(async (manager) => { ... })`.
-- Change counters with one conditional SQL `UPDATE` (`available_qty = available_qty + :n`), never read-modify-write. Use `@VersionColumn` for whole rows.
+- Change counters with one conditional SQL `UPDATE` (`available_qty = available_qty + :n`), never read-modify-write.
+- Rows with a `@VersionColumn` (orders, wallets) change through one conditional update in the repository: `UPDATE … WHERE id = :id AND version = :expected`, returning false when no row changed. TypeORM's `save()` increments the version but never checks it, so never use `save()` to change such a row. The service turns false into a 409 (`ORDER_CHANGED_CONCURRENTLY`).
 - Keep services small and focused. Split by subdomain rather than growing one large file.
 - Log with `private readonly logger = new Logger(ClassName.name)`. Never log personal data.
 

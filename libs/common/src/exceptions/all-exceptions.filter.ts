@@ -9,6 +9,7 @@ import {
 import type { Request, Response } from 'express';
 import { STATUS_CODES } from 'node:http';
 import { getCorrelationId, getRequestCorrelationId } from '../correlation/correlation-id.js';
+import { isUniqueViolation } from '../database/postgres-errors.js';
 import { COMMON_ERRORS } from './common-errors.js';
 import { DomainException, type DomainErrorKind } from './domain.exception.js';
 
@@ -38,8 +39,6 @@ const STATUS_BY_KIND: Record<DomainErrorKind, HttpStatus> = {
   conflict: HttpStatus.CONFLICT,
   unprocessable: HttpStatus.UNPROCESSABLE_ENTITY,
 };
-
-const POSTGRES_UNIQUE_VIOLATION = '23505';
 
 /**
  * Turns every error thrown while handling an HTTP request into the same JSON
@@ -147,19 +146,4 @@ function detailsOf(exception: HttpException): Record<string, unknown> | undefine
     return undefined;
   }
   return response as Record<string, unknown>;
-}
-
-/**
- * True for a Postgres unique-constraint error. TypeORM's QueryFailedError
- * copies the driver's `code` onto itself and also keeps it on `driverError`.
- */
-function isUniqueViolation(exception: unknown): boolean {
-  if (!(exception instanceof Error)) {
-    return false;
-  }
-  const { code, driverError } = exception as Error & {
-    code?: unknown;
-    driverError?: { code?: unknown };
-  };
-  return code === POSTGRES_UNIQUE_VIOLATION || driverError?.code === POSTGRES_UNIQUE_VIOLATION;
 }
