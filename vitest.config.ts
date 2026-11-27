@@ -28,7 +28,7 @@ export default defineConfig({
         '**/config/data-source.ts',
         // Database adapters: tested against real Postgres by the integration
         // tests (*.int-spec.ts), not by mocked unit tests.
-        '**/repository/typeorm-*.ts',
+        '**/typeorm-*.repository.ts',
       ],
       thresholds: { lines: 80, statements: 80, branches: 70, functions: 75 },
     },

@@ -115,6 +115,8 @@ npm run migration:revert:inventory    # undo the last one (also :order)
 npm run migration:generate:inventory -- apps/inventory-service/src/migrations/AddSomething
 ```
 
+Services reach Kafka through `KAFKA_BROKERS` (default `localhost:9092` outside production). Events are written to an `outbox_events` table in the same transaction as the change, and a relay inside each service sends them (see `libs/messaging`).
+
 Services connect with `TYPEORM_HOST`, `TYPEORM_PORT`, `TYPEORM_USERNAME`, `TYPEORM_PASSWORD` and `TYPEORM_DATABASE`. Outside production each one defaults to the local Docker Postgres; in production the service refuses to start if any is missing.
 
 ## Scripts
@@ -151,7 +153,7 @@ apps/<service>/
 └── test/              same folders as src/, e.g. test/services/products.service.spec.ts
 ```
 
-Code shared by every service lives in `libs/common` (imported as `@app/common`), with its tests in `libs/common/test/`. The events the services exchange are defined once in `libs/contracts` (imported as `@app/contracts`): topic names, the event envelope, a payload class with validation rules for each event, and `createEvent()` and `parseEvent()` to write and read them.
+Code shared by every service lives in `libs/common` (imported as `@app/common`), with its tests in `libs/common/test/`. The events the services exchange are defined once in `libs/contracts` (imported as `@app/contracts`): topic names, the event envelope, a payload class with validation rules for each event, and `createEvent()` and `parseEvent()` to write and read them. How services send and handle events (outbox, relay, idempotent consumer, dispatcher) lives in `libs/messaging` (`@app/messaging`).
 
 ## Stack notes
 

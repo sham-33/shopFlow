@@ -44,6 +44,10 @@ libs/common/                  # imported as @app/common by every service
 libs/contracts/               # imported as @app/contracts: the events every service sends and reads
 ├── src/                      # enums, topics, envelope, payloads/, EVENT_DEFINITIONS, createEvent, parseEvent
 └── test/
+
+libs/messaging/              # imported as @app/messaging: how a service sends and receives events
+├── src/                      # outbox/ (entity, service, relay), inbox/ (processed_events, idempotent consumer), kafka/, dispatcher/, MessagingModule
+└── test/
 ```
 
 Code used by one service lives in that service. Code that two or more services need goes in a `libs/` library.
@@ -194,6 +198,15 @@ Every event is defined once, in `libs/contracts`. Services never declare their o
 - Readers ignore fields they do not know (the tolerant reader rule), so a producer can add fields without breaking older consumers. Within one version, only add fields, and make them optional so that events written before the change still pass. Renaming or removing a field, or changing its type, needs a new version.
 - Money in payloads is rupees, validated with `@IsRupees()`.
 - To add an event: add its `EventType` value, its payload class in `payloads/<area>.payloads.ts`, and its entry in `EVENT_DEFINITIONS`. Then add a sample to `test/builders/events.builder.ts` and a row to the catalog in `test/event-definitions.spec.ts`. A new topic also goes in `docker/kafka/create-topics.sh`; a test checks that.
+
+## Sending and handling events
+
+Services never talk to Kafka directly. `MessagingModule.forRoot({ serviceName })` goes in each service's `app.module.ts`, after `DatabaseModule`. The service's `database.config.ts` must list `OutboxEvent` and `ProcessedEvent`, and its migrations must create their tables. Kafka brokers come from `KAFKA_BROKERS` (comma-separated; `localhost:9092` outside production, required in production).
+
+- **Sending:** call `outbox.add(manager, createEvent(...))` inside the same `dataSource.transaction` as the business change. A background relay sends the rows every 500 ms with an idempotent producer and `acks: all`. It may send an event twice, so every handler must be idempotent.
+- **Handling:** a handler class implements `EventHandler<T>` (`eventType` plus `handle(event)`) and only calls a service method, with no rules of its own. The service method opens the transaction and wraps its work in `idempotentConsumer.run(manager, consumerName, event.eventId, async () => { ... })`. The event record and the business change then commit or roll back together.
+- `EventDispatcher` picks the handler by `eventType`. A valid event without a handler in this service is ignored, because topics carry events a service does not care about. Two handlers for one type stop the service at start-up.
+- Events for one order must stay in order: never publish from a second place, and key them by the order ID (`createEvent` does this).
 
 ## Swagger
 

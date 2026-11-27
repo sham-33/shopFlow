@@ -34,7 +34,9 @@
       "@app/common": ["./libs/common/src/index.ts"],
       "@app/common/*": ["./libs/common/src/*"],
       "@app/contracts": ["./libs/contracts/src/index.ts"],
-      "@app/contracts/*": ["./libs/contracts/src/*"]
+      "@app/contracts/*": ["./libs/contracts/src/*"],
+      "@app/messaging": ["./libs/messaging/src/index.ts"],
+      "@app/messaging/*": ["./libs/messaging/src/*"]
     }
   },
   "files": [],
