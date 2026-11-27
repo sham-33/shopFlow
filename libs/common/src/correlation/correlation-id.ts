@@ -4,9 +4,12 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 export const CORRELATION_ID_HEADER = 'X-Correlation-Id';
 
-// A caller-supplied ID is accepted only if it is short and made of safe
-// characters, so a client cannot push arbitrary text into our logs.
-const VALID_CORRELATION_ID = /^[\w.:-]{1,128}$/;
+/**
+ * A correlation ID taken from a request header or an event is accepted only if
+ * it is short and made of safe characters, so a client cannot push arbitrary
+ * text into our logs.
+ */
+export const CORRELATION_ID_PATTERN = /^[\w.:-]{1,128}$/;
 
 interface CorrelationContext {
   correlationId: string;
@@ -45,7 +48,7 @@ export function resolveCorrelationId(req: IncomingMessage, res: ServerResponse):
 
   const header = req.headers[CORRELATION_ID_HEADER.toLowerCase()];
   const incoming = Array.isArray(header) ? header[0] : header;
-  const correlationId = incoming && VALID_CORRELATION_ID.test(incoming) ? incoming : randomUUID();
+  const correlationId = incoming && CORRELATION_ID_PATTERN.test(incoming) ? incoming : randomUUID();
 
   request.correlationId = correlationId;
   if (!res.headersSent) {

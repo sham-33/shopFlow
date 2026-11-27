@@ -151,7 +151,7 @@ apps/<service>/
 └── test/              same folders as src/, e.g. test/services/products.service.spec.ts
 ```
 
-Code shared by every service lives in `libs/common` (imported as `@app/common`), with its tests in `libs/common/test/`.
+Code shared by every service lives in `libs/common` (imported as `@app/common`), with its tests in `libs/common/test/`. The events the services exchange are defined once in `libs/contracts` (imported as `@app/contracts`): topic names, the event envelope, a payload class with validation rules for each event, and `createEvent()` and `parseEvent()` to write and read them.
 
 ## Stack notes
 

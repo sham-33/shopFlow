@@ -17,16 +17,8 @@ export enum OrderStatus {
   REFUNDED = 'REFUNDED',
 }
 
-export enum PaymentMethod {
-  WALLET = 'WALLET',
-  CARD = 'CARD',
-  UPI = 'UPI',
-}
-
-export enum CancelReason {
-  CUSTOMER_REQUEST = 'CUSTOMER_REQUEST',
-  PAYMENT_FAILED = 'PAYMENT_FAILED',
-}
+// Also sent in events, so the one definition lives in the contracts library.
+export { CancelReason, PaymentMethod } from '@app/contracts';
 
 export enum CouponType {
   /** A percentage off the subtotal (percent_off). */

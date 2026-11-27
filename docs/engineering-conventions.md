@@ -40,6 +40,10 @@ apps/<service>/
 libs/common/                  # imported as @app/common by every service
 ├── src/                      # errors, validation, trimming, logging, correlation IDs, pagination, money, setupApp
 └── test/
+
+libs/contracts/               # imported as @app/contracts: the events every service sends and reads
+├── src/                      # enums, topics, envelope, payloads/, EVENT_DEFINITIONS, createEvent, parseEvent
+└── test/
 ```
 
 Code used by one service lives in that service. Code that two or more services need goes in a `libs/` library.
@@ -153,7 +157,7 @@ Do not throw Nest's `HttpException` from services, so the business rules stay fr
 
 - Postgres stores money as `numeric(12,2)` rupees.
 - Code handles it as whole **paise** (`pricePaise: 49950`), through `paiseTransformer` on the column.
-- APIs accept and return rupees as a JSON number with at most 2 decimals. Convert with `rupeesToPaise` and `paiseToRupees`.
+- APIs and events carry rupees as a JSON number with at most 2 decimals. Convert with `rupeesToPaise` and `paiseToRupees`.
 - Never do money math in floating point (`price * 100`, `parseFloat`).
 
 ## Database and migrations
@@ -162,7 +166,7 @@ Do not throw Nest's `HttpException` from services, so the business rules stay fr
 - List entities explicitly in `config/database.config.ts`. No `dist/**/*.entity` globs: the build bundles each app into one file.
 - Give every `@Column` an explicit `type`, and wrap relation properties in `Relation<T>`. The migration CLI runs through `tsx`, which does not emit decorator metadata.
 - Name constraints (`pk_products`, `uq_products_sku`, `fk_stock_product`, `chk_…`) so errors and schemas are readable.
-- Store enum values (statuses, payment methods) in a `varchar` column limited by a CHECK built with `sqlIn()` from `@app/common`: `@Check('chk_orders_status', sqlIn('status', Object.values(OrderStatus)))`. Not Postgres enum types, which are awkward to change in a migration. The TypeScript enums live in `src/domain/enums.ts`; never rename a value.
+- Store enum values (statuses, payment methods) in a `varchar` column limited by a CHECK built with `sqlIn()` from `@app/common`: `@Check('chk_orders_status', sqlIn('status', Object.values(OrderStatus)))`. Not Postgres enum types, which are awkward to change in a migration. The TypeScript enums live in `src/domain/enums.ts` (those that also travel in events are re-exported from `@app/contracts`); never rename a value.
 - A CHECK only rejects a row when its expression is false, and anything compared with NULL is NULL. On nullable columns, say `IS NOT NULL` explicitly: `"amount_off" IS NOT NULL AND "amount_off" > 0`.
 - Index every foreign-key column (`idx_order_items_order_id`); Postgres does not do it automatically.
 - Columns are `snake_case` (`@Column({ name: 'available_qty' })`), properties `camelCase`.
@@ -178,6 +182,18 @@ npm run migration:run:inventory
 - Logs are JSON lines from pino, named after the service.
 - Each request gets a correlation ID from the `X-Correlation-Id` header, or a new UUID. It is returned in the same header, added to every log line of the request, and readable anywhere with `getCorrelationId()`.
 - Kafka consumers (Week 3) will restore it from the event envelope with `runWithCorrelationId()`.
+
+## Events and contracts
+
+Every event is defined once, in `libs/contracts`. Services never declare their own event shapes, topic names or event enums.
+
+- Every message has the same envelope: `eventId`, `eventType`, `eventVersion`, `occurredAt`, `aggregateId`, `correlationId`, `causationId`, `producer` and `payload`.
+- `EVENT_DEFINITIONS` gives each event type its topic, producer, version, payload class and message key. Its type requires an entry for every `EventType`.
+- Write events with `createEvent(type, payload, context)`. It fills in the ID, time, version, producer and key, and validates the event, so a bad event fails in the service that writes it. For an event caused by another one, pass `causedBy(incoming)` as the context.
+- Read events with `parseEvent(message.value)`. It returns `AnyEvent`; checking `eventType` narrows the payload. Anything that breaks the contract throws `InvalidEventError`. Retrying cannot fix such a message, so it goes straight to the dead-letter topic.
+- Readers ignore fields they do not know (the tolerant reader rule), so a producer can add fields without breaking older consumers. Within one version, only add fields, and make them optional so that events written before the change still pass. Renaming or removing a field, or changing its type, needs a new version.
+- Money in payloads is rupees, validated with `@IsRupees()`.
+- To add an event: add its `EventType` value, its payload class in `payloads/<area>.payloads.ts`, and its entry in `EVENT_DEFINITIONS`. Then add a sample to `test/builders/events.builder.ts` and a row to the catalog in `test/event-definitions.spec.ts`. A new topic also goes in `docker/kafka/create-topics.sh`; a test checks that.
 
 ## Swagger
 

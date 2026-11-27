@@ -32,7 +32,9 @@
     "types": ["vitest/globals", "node"],
     "paths": {
       "@app/common": ["./libs/common/src/index.ts"],
-      "@app/common/*": ["./libs/common/src/*"]
+      "@app/common/*": ["./libs/common/src/*"],
+      "@app/contracts": ["./libs/contracts/src/index.ts"],
+      "@app/contracts/*": ["./libs/contracts/src/*"]
     }
   },
   "files": [],
