@@ -1,7 +1,9 @@
 // Fixed values used across the order-service.
 
+import { ServiceName } from '@app/contracts';
+
 /** Name on every log line. */
-export const SERVICE_NAME = 'order-service';
+export const SERVICE_NAME = ServiceName.ORDER;
 
 /** Port used when PORT is not set. */
 export const DEFAULT_PORT = 3001;
@@ -55,3 +57,11 @@ export const STATUS_CHANGE_REASONS = {
 /** Coupon codes: 3–20 upper-case letters and digits, for example SAVE10. */
 export const COUPON_CODE_PATTERN = /^[A-Z0-9]{3,20}$/;
 export const COUPON_CODE_PATTERN_MESSAGE = 'couponCode must be 3-20 letters and digits';
+
+// Messaging
+
+/** Names under which this service records the events it has handled (processed_events). */
+export const CONSUMER_NAMES = {
+  /** Keeps product_catalog in step with ProductUpdated events. */
+  CATALOG_SYNC: 'order-service.catalog-sync',
+} as const;

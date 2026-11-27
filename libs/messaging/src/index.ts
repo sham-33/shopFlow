@@ -1,4 +1,5 @@
 export * from './constants.js';
+export * from './current-event-context.js';
 export * from './dispatcher/event-dispatcher.js';
 export * from './dispatcher/event-handler.js';
 export * from './inbox/idempotent-consumer.js';

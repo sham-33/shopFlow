@@ -796,7 +796,7 @@ Goal: events flow between Order and Inventory, visible in AKHQ.
 
 - [x] `libs/contracts`: topic names, event envelope, payload classes with validation
 - [x] `libs/messaging`: Kafka publisher (idempotent, `acks: all`), outbox entity and relay, `processed_events` and the `idempotent()` helper, `EventDispatcher`
-- [ ] `ProductUpdated` from Inventory keeps the Order Service's `product_catalog` in sync (compacted topic)
+- [x] `ProductUpdated` from Inventory keeps the Order Service's `product_catalog` in sync (compacted topic)
 - [ ] `OrderCreated` triggers stock reservation with the conditional `UPDATE`, all-or-nothing
 - [ ] `StockReserved` and `StockReservationFailed` update the order status
 - [ ] Correlation ID passed through events; check one order's journey in the logs and in AKHQ

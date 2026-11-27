@@ -46,7 +46,7 @@ libs/contracts/               # imported as @app/contracts: the events every ser
 └── test/
 
 libs/messaging/              # imported as @app/messaging: how a service sends and receives events
-├── src/                      # outbox/ (entity, service, relay), inbox/ (processed_events, idempotent consumer), kafka/, dispatcher/, MessagingModule
+├── src/                      # outbox/ (entity, service, relay), inbox/ (processed_events, idempotent consumer), kafka/, consumer/, dispatcher/, MessagingModule
 └── test/
 ```
 
@@ -185,7 +185,7 @@ npm run migration:run:inventory
 
 - Logs are JSON lines from pino, named after the service.
 - Each request gets a correlation ID from the `X-Correlation-Id` header, or a new UUID. It is returned in the same header, added to every log line of the request, and readable anywhere with `getCorrelationId()`.
-- Kafka consumers (Week 3) will restore it from the event envelope with `runWithCorrelationId()`.
+- Kafka consumers restore it from the event envelope (`MessageProcessor` calls `runWithCorrelationId()`), and `currentEventContext()` copies it into the events a request writes, so one ID follows an order through every service.
 
 ## Events and contracts
 
@@ -206,6 +206,8 @@ Services never talk to Kafka directly. `MessagingModule.forRoot({ serviceName })
 - **Sending:** call `outbox.add(manager, createEvent(...))` inside the same `dataSource.transaction` as the business change. A background relay sends the rows every 500 ms with an idempotent producer and `acks: all`. It may send an event twice, so every handler must be idempotent.
 - **Handling:** a handler class implements `EventHandler<T>` (`eventType` plus `handle(event)`) and only calls a service method, with no rules of its own. The service method opens the transaction and wraps its work in `idempotentConsumer.run(manager, consumerName, event.eventId, async () => { ... })`. The event record and the business change then commit or roll back together.
 - `EventDispatcher` picks the handler by `eventType`. A valid event without a handler in this service is ignored, because topics carry events a service does not care about. Two handlers for one type stop the service at start-up.
+- **Wiring a handler:** pass the handler classes and the modules that export what they need: `MessagingModule.forRoot({ serviceName, imports: [CatalogModule], handlers: [ProductUpdatedHandler] })`. The module creates the handlers, builds the `EventDispatcher` and starts a consumer group named after the service, reading from the start of each topic its handlers need. Handlers live in `src/messaging/handlers/`, one per event type.
+- **Failures:** a message that breaks the contract is moved to `<service>.dlt` with `x-original-topic`, `x-original-partition` and `x-error` headers, and the consumer carries on. An error from a handler is passed on: the offset is not committed and the message is read again. Retry topics with backoff come in Week 4.
 - Events for one order must stay in order: never publish from a second place, and key them by the order ID (`createEvent` does this).
 
 ## Swagger

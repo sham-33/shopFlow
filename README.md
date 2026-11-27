@@ -89,7 +89,7 @@ Orders take an optional `couponCode`, matched without regard to case. Three coup
 
 Any coupon can also take `minOrderAmount` (rupees) and `expiresAt`. A coupon that does not exist, is inactive, has expired or is below its minimum returns 422 `INVALID_COUPON`, with the cause in `details.reason`.
 
-Until Week 3 fills `product_catalog` from Kafka, add products to it by hand (`docker compose exec postgres psql -U shopflow -d orders_db`):
+The order service's `product_catalog` is filled from Kafka: the inventory service sends a `ProductUpdated` event whenever a product is created or changed, so run both services. A product created before this existed has no event yet; `PATCH` it with an empty body (`{}`) to send one. To add a product by hand instead (`docker compose exec postgres psql -U shopflow -d orders_db`):
 
 ```sql
 INSERT INTO product_catalog (product_id, sku, name, price, active)

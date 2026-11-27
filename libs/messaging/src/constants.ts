@@ -31,3 +31,13 @@ export const LOCAL_KAFKA_BROKERS = 'localhost:9092';
 
 /** Longest to wait for the first broker connection and for each request. */
 export const KAFKA_CONNECTION_TIMEOUT_MS = 10_000;
+
+/** Headers added to a message sent to a dead-letter topic. */
+export const DEAD_LETTER_HEADERS = {
+  ORIGINAL_TOPIC: 'x-original-topic',
+  ORIGINAL_PARTITION: 'x-original-partition',
+  ERROR: 'x-error',
+} as const;
+
+/** Longest error text stored in a dead-letter header. */
+export const DEAD_LETTER_ERROR_MAX_LENGTH = 500;

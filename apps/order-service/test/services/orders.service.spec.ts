@@ -59,7 +59,10 @@ describe('OrdersService', () => {
       insert: vi.fn<OrderRepository['insert']>((order) => Promise.resolve(order)),
       changeStatus: vi.fn<OrderRepository['changeStatus']>(),
     };
-    catalog = { findByIds: vi.fn<CatalogRepository['findByIds']>() };
+    catalog = {
+      findByIds: vi.fn<CatalogRepository['findByIds']>(),
+      upsert: vi.fn<CatalogRepository['upsert']>(),
+    };
     coupons = {
       findByCode: vi.fn<CouponRepository['findByCode']>(),
       insert: vi.fn<CouponRepository['insert']>(),

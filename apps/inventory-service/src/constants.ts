@@ -1,10 +1,12 @@
 // Fixed values used across the inventory service. Error codes live in
 // constants/errors.ts.
 
+import { ServiceName } from '@app/contracts';
+
 // Service
 
 /** Name on every log line. */
-export const SERVICE_NAME = 'inventory-service';
+export const SERVICE_NAME = ServiceName.INVENTORY;
 
 /** Port used when PORT is not set. */
 export const DEFAULT_PORT = 3002;

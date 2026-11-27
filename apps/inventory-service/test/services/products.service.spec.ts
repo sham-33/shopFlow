@@ -1,3 +1,7 @@
+import { runWithCorrelationId } from '@app/common';
+import type { AnyEvent } from '@app/contracts';
+import type { OutboxService } from '@app/messaging';
+import type { DataSource, EntityManager } from 'typeorm';
 import type { Mocked } from 'vitest';
 import { DuplicateSkuException } from '../../src/exceptions/duplicate-sku.exception.js';
 import { ProductNotFoundException } from '../../src/exceptions/product-not-found.exception.js';
@@ -17,12 +21,25 @@ function mockRepository(): Mocked<ProductRepository> {
 }
 
 describe('ProductsService', () => {
+  const manager = { name: 'transaction manager' } as unknown as EntityManager;
   let repository: Mocked<ProductRepository>;
+  let addToOutbox: ReturnType<typeof vi.fn<OutboxService['add']>>;
+  let transaction: ReturnType<typeof vi.fn>;
   let service: ProductsService;
+
+  /** The ProductUpdated events written to the outbox, in order. */
+  const eventsWritten = (): AnyEvent[] => addToOutbox.mock.calls.map(([, event]) => event);
 
   beforeEach(() => {
     repository = mockRepository();
-    service = new ProductsService(repository);
+    addToOutbox = vi.fn<OutboxService['add']>().mockResolvedValue(undefined);
+    // Like DataSource.transaction: runs the callback with a manager and passes on its result or error.
+    transaction = vi.fn((work: (m: EntityManager) => Promise<unknown>) => work(manager));
+    service = new ProductsService(
+      repository,
+      { add: addToOutbox } as unknown as OutboxService,
+      { transaction } as unknown as DataSource,
+    );
   });
 
   describe('create', () => {
@@ -40,7 +57,7 @@ describe('ProductsService', () => {
 
       await expect(service.create(newProduct)).resolves.toBe(created);
       expect(repository.existsBySku).toHaveBeenCalledWith('TSHIRT-RED-M');
-      expect(repository.insert).toHaveBeenCalledWith(newProduct);
+      expect(repository.insert).toHaveBeenCalledWith(newProduct, manager);
     });
 
     it('rejects a SKU that already exists, without inserting anything', async () => {
@@ -55,6 +72,97 @@ describe('ProductsService', () => {
         details: { sku: 'TSHIRT-RED-M' },
       });
       expect(repository.insert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('events', () => {
+    const newProduct: NewProduct = {
+      sku: 'TSHIRT-RED-M',
+      name: 'Red T-shirt (M)',
+      pricePaise: 49950,
+      initialQuantity: 10,
+    };
+
+    it('create writes ProductUpdated with the product’s state, in rupees, in the same transaction', async () => {
+      repository.existsBySku.mockResolvedValue(false);
+      repository.insert.mockResolvedValue(aProduct());
+
+      await runWithCorrelationId('c-91ab', () => service.create(newProduct));
+
+      expect(addToOutbox).toHaveBeenCalledOnce();
+      expect(addToOutbox.mock.calls[0]?.[0]).toBe(manager);
+      expect(eventsWritten()[0]).toMatchObject({
+        eventType: 'ProductUpdated',
+        aggregateId: PRODUCT_ID,
+        correlationId: 'c-91ab',
+        causationId: null,
+        producer: 'inventory-service',
+        payload: {
+          productId: PRODUCT_ID,
+          sku: 'TSHIRT-RED-M',
+          name: 'Red T-shirt (M)',
+          price: 499.5,
+          active: true,
+        },
+      });
+    });
+
+    it('create writes no event for a SKU that already exists', async () => {
+      repository.existsBySku.mockResolvedValue(true);
+
+      await expect(service.create(newProduct)).rejects.toBeInstanceOf(DuplicateSkuException);
+
+      expect(addToOutbox).not.toHaveBeenCalled();
+    });
+
+    it('create passes on an outbox error, so the product is not saved without its event', async () => {
+      const failure = new Error('outbox_events is locked');
+      repository.existsBySku.mockResolvedValue(false);
+      repository.insert.mockResolvedValue(aProduct());
+      addToOutbox.mockRejectedValue(failure);
+
+      await expect(service.create(newProduct)).rejects.toBe(failure);
+    });
+
+    it('update writes ProductUpdated with the new state', async () => {
+      repository.findById.mockResolvedValue(aProduct());
+
+      await service.update(PRODUCT_ID, { pricePaise: 1999, active: false });
+
+      expect(addToOutbox.mock.calls[0]?.[0]).toBe(manager);
+      expect(eventsWritten()[0]?.payload).toMatchObject({
+        productId: PRODUCT_ID,
+        name: 'Red T-shirt (M)',
+        price: 19.99,
+        active: false,
+      });
+    });
+
+    it('update writes the event even when nothing changed, so a missed event can be re-sent', async () => {
+      repository.findById.mockResolvedValue(aProduct());
+
+      await service.update(PRODUCT_ID, {});
+
+      expect(addToOutbox).toHaveBeenCalledOnce();
+    });
+
+    it('update writes no event for a product that does not exist', async () => {
+      repository.findById.mockResolvedValue(null);
+
+      await expect(service.update(PRODUCT_ID, { name: 'x' })).rejects.toBeInstanceOf(
+        ProductNotFoundException,
+      );
+
+      expect(addToOutbox).not.toHaveBeenCalled();
+    });
+
+    it('restock writes no event, because the product itself did not change', async () => {
+      repository.addAvailableStock.mockResolvedValue(true);
+      repository.findById.mockResolvedValue(aProduct());
+
+      await service.restock(PRODUCT_ID, 5);
+
+      expect(addToOutbox).not.toHaveBeenCalled();
     });
   });
 
@@ -145,7 +253,7 @@ describe('ProductsService', () => {
         pricePaise: 49950,
         active: true,
       });
-      expect(repository.save).toHaveBeenCalledWith(updated);
+      expect(repository.save).toHaveBeenCalledWith(updated, manager);
     });
 
     it('changes every field when all are given', async () => {

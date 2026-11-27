@@ -2,6 +2,8 @@ import { CommonModule, HealthModule } from '@app/common';
 import { MessagingModule } from '@app/messaging';
 import { Module } from '@nestjs/common';
 import { SERVICE_NAME } from './constants.js';
+import { ProductUpdatedHandler } from './messaging/handlers/product-updated.handler.js';
+import { CatalogModule } from './modules/catalog.module.js';
 import { DatabaseModule } from './modules/database.module.js';
 import { OrdersModule } from './modules/orders.module.js';
 
@@ -10,7 +12,11 @@ import { OrdersModule } from './modules/orders.module.js';
     CommonModule.forRoot({ serviceName: SERVICE_NAME }),
     DatabaseModule,
     HealthModule,
-    MessagingModule.forRoot({ serviceName: SERVICE_NAME }),
+    MessagingModule.forRoot({
+      serviceName: SERVICE_NAME,
+      imports: [CatalogModule],
+      handlers: [ProductUpdatedHandler],
+    }),
     OrdersModule,
   ],
 })
