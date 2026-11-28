@@ -1,5 +1,8 @@
 import { CancelReason, PaymentMethod } from '../../src/domain/enums.js';
-import { toOrderCreatedPayload } from '../../src/mappers/order-event.mapper.js';
+import {
+  toOrderCreatedPayload,
+  toOrderPaymentRequestedPayload,
+} from '../../src/mappers/order-event.mapper.js';
 import {
   CUSTOMER_ID,
   MUG_ID,
@@ -72,5 +75,36 @@ describe('toOrderCreatedPayload', () => {
     const order = anOrder({ items: undefined });
 
     expect(() => toOrderCreatedPayload(order)).toThrow(`Order ${ORDER_ID} has no items loaded`);
+  });
+});
+
+describe('toOrderPaymentRequestedPayload', () => {
+  it('asks for the total after the discount, in rupees, by the method the customer chose', () => {
+    const order = anOrder({
+      subtotalPaise: 119899,
+      discountPaise: 11990,
+      totalPaise: 107909,
+      paymentMethod: PaymentMethod.CARD,
+    });
+
+    expect(toOrderPaymentRequestedPayload(order)).toEqual({
+      orderId: ORDER_ID,
+      customerId: CUSTOMER_ID,
+      amount: 1079.09,
+      currency: 'INR',
+      paymentMethod: PaymentMethod.CARD,
+    });
+  });
+
+  it('asks for 0 rupees for a free order', () => {
+    const order = anOrder({ discountPaise: 99900, totalPaise: 0 });
+
+    expect(toOrderPaymentRequestedPayload(order).amount).toBe(0);
+  });
+
+  it('needs no items, because the payment service charges the total', () => {
+    const order = anOrder({ items: undefined });
+
+    expect(() => toOrderPaymentRequestedPayload(order)).not.toThrow();
   });
 });

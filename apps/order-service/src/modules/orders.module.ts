@@ -8,6 +8,7 @@ import { OrderStatusHistory } from '../entities/order-status-history.entity.js';
 import { Order } from '../entities/order.entity.js';
 import { ORDER_REPOSITORY } from '../repository/order.repository.js';
 import { TypeOrmOrderRepository } from '../repository/typeorm-order.repository.js';
+import { OrderSagaService } from '../services/order-saga.service.js';
 import { OrdersService } from '../services/orders.service.js';
 import { CatalogModule } from './catalog.module.js';
 import { CouponsModule } from './coupons.module.js';
@@ -21,10 +22,13 @@ import { CouponsModule } from './coupons.module.js';
   controllers: [OrdersController],
   providers: [
     OrdersService,
+    OrderSagaService,
     // Plain domain classes with no dependencies, so they need no @Injectable().
     { provide: OrderStateMachine, useValue: new OrderStateMachine() },
     { provide: DiscountStrategyFactory, useValue: new DiscountStrategyFactory() },
     { provide: ORDER_REPOSITORY, useClass: TypeOrmOrderRepository },
   ],
+  // For the event handlers that MessagingModule creates.
+  exports: [OrderSagaService],
 })
 export class OrdersModule {}

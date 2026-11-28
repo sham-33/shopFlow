@@ -50,6 +50,8 @@ export const ORDER_ID_PARAM = { name: 'id', description: 'Order ID', format: 'uu
 export const STATUS_CHANGE_REASONS = {
   PLACED: 'Order placed',
   CANCELLED_BY_CUSTOMER: 'Cancelled by the customer',
+  STOCK_RESERVED: 'Stock reserved',
+  OUT_OF_STOCK: 'Not enough stock',
 } as const;
 
 // Coupons
@@ -64,4 +66,6 @@ export const COUPON_CODE_PATTERN_MESSAGE = 'couponCode must be 3-20 letters and 
 export const CONSUMER_NAMES = {
   /** Keeps product_catalog in step with ProductUpdated events. */
   CATALOG_SYNC: 'order-service.catalog-sync',
+  /** Moves orders on when another service answers: stock reserved or not, and (Week 4) payment results. */
+  ORDER_STATUS: 'order-service.order-status',
 } as const;
