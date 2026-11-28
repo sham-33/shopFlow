@@ -1,3 +1,4 @@
+import { CorrelationScope } from '@app/common';
 import type { ServiceName } from '@app/contracts';
 import { Module, type DynamicModule, type Provider, type Type } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -96,9 +97,13 @@ export class MessagingModule {
         EventDispatcher,
         {
           provide: MessageProcessor,
-          useFactory: (dispatcher: EventDispatcher, publisher: EventPublisher) =>
-            new MessageProcessor(serviceName, dispatcher, publisher),
-          inject: [EventDispatcher, EVENT_PUBLISHER],
+          useFactory: (
+            dispatcher: EventDispatcher,
+            publisher: EventPublisher,
+            correlation: CorrelationScope,
+          ) => new MessageProcessor(serviceName, dispatcher, publisher, correlation),
+          // CorrelationScope comes from the global CommonModule.
+          inject: [EventDispatcher, EVENT_PUBLISHER, CorrelationScope],
         },
         {
           // One consumer group per service: its copies share the partitions.

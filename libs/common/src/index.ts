@@ -13,6 +13,7 @@ export * from './exceptions/request-validation.exception.js';
 export * from './health/health.controller.js';
 export * from './health/health.module.js';
 export * from './http/setup-app.js';
+export * from './logger/correlation-scope.js';
 export * from './logger/logger.params.js';
 export * from './money/paise.js';
 export * from './pagination/pagination.js';

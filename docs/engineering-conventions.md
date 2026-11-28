@@ -186,7 +186,8 @@ npm run migration:run:inventory
 
 - Logs are JSON lines from pino, named after the service.
 - Each request gets a correlation ID from the `X-Correlation-Id` header, or a new UUID. It is returned in the same header, added to every log line of the request, and readable anywhere with `getCorrelationId()`.
-- Kafka consumers restore it from the event envelope (`MessageProcessor` calls `runWithCorrelationId()`), and `currentEventContext()` copies it into the events a request writes, so one ID follows an order through every service.
+- Kafka consumers restore it from the event envelope: `MessageProcessor` runs each handler in `CorrelationScope.run(event.correlationId, ...)`, which sets it for `getCorrelationId()` and binds it to every log line inside, as pino-http does for a request. `currentEventContext()` and `causedBy()` copy it into the events written, so one ID follows an order through every service.
+- Any other work that does not come from HTTP (a scheduled job, a worker) runs in `CorrelationScope` too. Injecting it needs no import: `CommonModule` is global.
 
 ## Events and contracts
 

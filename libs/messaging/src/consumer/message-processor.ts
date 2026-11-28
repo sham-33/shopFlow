@@ -1,4 +1,4 @@
-import { runWithCorrelationId } from '@app/common';
+import type { CorrelationScope } from '@app/common';
 import { deadLetterTopic, InvalidEventError, parseEvent, type ServiceName } from '@app/contracts';
 import { Logger } from '@nestjs/common';
 import { DEAD_LETTER_ERROR_MAX_LENGTH, DEAD_LETTER_HEADERS } from '../constants.js';
@@ -28,6 +28,7 @@ export class MessageProcessor {
     private readonly service: ServiceName,
     private readonly dispatcher: EventDispatcher,
     private readonly publisher: EventPublisher,
+    private readonly correlation: CorrelationScope,
   ) {}
 
   public async process(message: ReceivedMessage): Promise<void> {
@@ -42,7 +43,7 @@ export class MessageProcessor {
       throw error;
     }
     // Everything the handler logs, and every event it writes, carries the event's journey.
-    await runWithCorrelationId(event.correlationId, async () => {
+    await this.correlation.run(event.correlationId, async () => {
       const handled = await this.dispatcher.dispatch(event);
       if (handled) {
         this.logger.log(`Handled ${event.eventType} ${event.eventId}`);

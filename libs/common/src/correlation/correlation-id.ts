@@ -4,6 +4,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 export const CORRELATION_ID_HEADER = 'X-Correlation-Id';
 
+/** The log field that carries the correlation ID, on request lines and event-handling lines alike. */
+export const CORRELATION_ID_LOG_FIELD = 'correlationId';
+
 /**
  * A correlation ID taken from a request header or an event is accepted only if
  * it is short and made of safe characters, so a client cannot push arbitrary
@@ -26,7 +29,8 @@ export function getCorrelationId(): string | undefined {
 
 /**
  * Runs `fn` with `correlationId` as the current correlation ID. The HTTP
- * middleware uses it for requests; Kafka consumers will use it for messages.
+ * middleware uses it for requests. Work that does not come from HTTP should
+ * use CorrelationScope, which also puts the ID on its log lines.
  */
 export function runWithCorrelationId<T>(correlationId: string, fn: () => T): T {
   return storage.run({ correlationId }, fn);

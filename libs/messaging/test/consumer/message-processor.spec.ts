@@ -1,4 +1,4 @@
-import { getCorrelationId } from '@app/common';
+import { type CorrelationScope, getCorrelationId, runWithCorrelationId } from '@app/common';
 import { Logger } from '@nestjs/common';
 import { EventType, ServiceName } from '@app/contracts';
 import { DEAD_LETTER_ERROR_MAX_LENGTH } from '../../src/constants.js';
@@ -21,6 +21,7 @@ const messageOf = (
 describe('MessageProcessor', () => {
   let dispatch: ReturnType<typeof vi.fn<EventDispatcher['dispatch']>>;
   let publish: ReturnType<typeof vi.fn<EventPublisher['publish']>>;
+  let runInScope: ReturnType<typeof vi.fn<CorrelationScope['run']>>;
   let processor: MessageProcessor;
 
   /** The headers of the one message sent to the dead-letter topic. */
@@ -32,12 +33,15 @@ describe('MessageProcessor', () => {
     vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     dispatch = vi.fn<EventDispatcher['dispatch']>().mockResolvedValue(true);
     publish = vi.fn<EventPublisher['publish']>().mockResolvedValue(undefined);
+    // Sets the correlation ID like the real scope; its log binding is tested in libs/common.
+    runInScope = vi.fn<CorrelationScope['run']>((correlationId, work) =>
+      runWithCorrelationId(correlationId, work),
+    );
     processor = new MessageProcessor(
       ServiceName.INVENTORY,
       { dispatch } as unknown as EventDispatcher,
-      {
-        publish,
-      },
+      { publish },
+      { run: runInScope } as unknown as CorrelationScope,
     );
   });
 
@@ -65,6 +69,18 @@ describe('MessageProcessor', () => {
 
     expect(seen).toBe('journey-7');
     expect(getCorrelationId()).toBeUndefined();
+  });
+
+  it('runs the handler in a correlation scope, so every line it logs carries the journey', async () => {
+    await processor.process(messageOf(JSON.stringify(anEvent(undefined, 'journey-7'))));
+
+    expect(runInScope).toHaveBeenCalledExactlyOnceWith('journey-7', expect.any(Function));
+  });
+
+  it('opens no scope for a message that breaks the contract: it has no journey to trust', async () => {
+    await processor.process(messageOf('not json'));
+
+    expect(runInScope).not.toHaveBeenCalled();
   });
 
   it('logs each event it handles, with the journey it belongs to, inside the correlation context', async () => {

@@ -105,6 +105,17 @@ curl -X POST localhost:3001/api/v1/orders \
 
 Placing an order also sends `OrderCreated`. The inventory service then reserves every line of the order or none of them, and answers with `StockReserved` or `StockReservationFailed` (which lists the short items). `GET /api/v1/products/:id` on port 3002 shows the units moving from `available` to `reserved`, and the `stock_reservations` table in `inventory_db` shows which order holds them. The order then moves on by itself: to AWAITING_PAYMENT (and sends `OrderPaymentRequested`) or to FAILED. `GET /api/v1/orders/:id` shows each move in `history`.
 
+## Following one order
+
+Every request gets a correlation ID: send your own in `X-Correlation-Id`, or read the one the response returns. The events the request causes carry it in their envelope and in an `x-correlation-id` header, and every log line written for it, in any service, has it as `correlationId`.
+
+```bash
+curl -X POST localhost:3001/api/v1/orders -H 'X-Correlation-Id: journey-1' ...   # place an order
+grep journey-1 order.log inventory.log   # logs saved from each service, e.g. npm run start:dev -- order-service | tee order.log
+```
+
+In AKHQ (http://localhost:8080), open the `orders.events` and `inventory.events` topics, go to Data, and search by header value `journey-1`, or by key (the order ID). An order's events all share its ID as key, so they sit in one partition, in order. Each event's `causationId` names the event that caused it: `OrderCreated`, then `StockReserved`, then `OrderPaymentRequested`.
+
 ## Database migrations
 
 The schema changes only through TypeORM migrations; `synchronize` is off. Each service's migrations live in `apps/<service>/src/migrations/`.

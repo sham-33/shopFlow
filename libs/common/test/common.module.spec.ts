@@ -1,4 +1,15 @@
-import { Body, Controller, Get, type INestApplication, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Injectable,
+  type INestApplication,
+  Module,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ServiceUnavailableException } from '@nestjs/common';
 import { Type } from 'class-transformer';
@@ -8,6 +19,7 @@ import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { CommonModule } from '../src/common.module.js';
 import { getCorrelationId } from '../src/correlation/correlation-id.js';
+import { CorrelationScope } from '../src/logger/correlation-scope.js';
 import type { ErrorResponseBody } from '../src/exceptions/all-exceptions.filter.js';
 import { type DomainErrorKind, DomainException } from '../src/exceptions/domain.exception.js';
 import type { FieldError } from '../src/exceptions/request-validation.exception.js';
@@ -88,12 +100,21 @@ class ThingsController {
   }
 }
 
+/** A feature module that, like MessagingModule, never imports CommonModule. */
+@Injectable()
+class EventWork {
+  constructor(@Inject(CorrelationScope) public readonly scope: CorrelationScope) {}
+}
+
+@Module({ providers: [EventWork] })
+class FeatureModule {}
+
 describe('CommonModule', () => {
   let app: INestApplication<App>;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      imports: [CommonModule.forRoot({ serviceName: 'test-service' })],
+      imports: [CommonModule.forRoot({ serviceName: 'test-service' }), FeatureModule],
       controllers: [ThingsController],
     }).compile();
 
@@ -104,6 +125,10 @@ describe('CommonModule', () => {
 
   afterAll(async () => {
     await app.close();
+  });
+
+  it('lets any module inject CorrelationScope without importing CommonModule', () => {
+    expect(app.get(EventWork).scope).toBeInstanceOf(CorrelationScope);
   });
 
   describe('correlation ID', () => {

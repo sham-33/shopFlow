@@ -799,7 +799,7 @@ Goal: events flow between Order and Inventory, visible in AKHQ.
 - [x] `ProductUpdated` from Inventory keeps the Order Service's `product_catalog` in sync (compacted topic)
 - [x] `OrderCreated` triggers stock reservation with the conditional `UPDATE`, all-or-nothing
 - [x] `StockReserved` and `StockReservationFailed` update the order status
-- [ ] Correlation ID passed through events; check one order's journey in the logs and in AKHQ
+- [x] Correlation ID passed through events; check one order's journey in the logs and in AKHQ
 
 ### Week 4: Payment Service and the full Saga
 

@@ -8,6 +8,7 @@ import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { CorrelationIdMiddleware } from './correlation/correlation-id.middleware.js';
 import { AllExceptionsFilter } from './exceptions/all-exceptions.filter.js';
+import { CorrelationScope } from './logger/correlation-scope.js';
 import { createLoggerParams } from './logger/logger.params.js';
 import { TrimStringsPipe } from './validation/trim-strings.pipe.js';
 import { createValidationPipe } from './validation/validation.pipe.js';
@@ -24,7 +25,7 @@ export interface CommonModuleOptions {
  *
  * The pipe and filter are registered as providers (APP_PIPE, APP_FILTER)
  * rather than in main.ts, so tests that build the app from AppModule get
- * them too.
+ * them too. The module is global, so any module can inject CorrelationScope.
  */
 @Module({})
 export class CommonModule implements NestModule {
@@ -37,8 +38,10 @@ export class CommonModule implements NestModule {
         { provide: APP_PIPE, useClass: TrimStringsPipe },
         { provide: APP_PIPE, useFactory: createValidationPipe },
         { provide: APP_FILTER, useClass: AllExceptionsFilter },
+        CorrelationScope,
       ],
-      exports: [LoggerModule],
+      exports: [LoggerModule, CorrelationScope],
+      global: true,
     };
   }
 

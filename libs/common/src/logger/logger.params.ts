@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Params } from 'nestjs-pino';
-import { resolveCorrelationId } from '../correlation/correlation-id.js';
+import { CORRELATION_ID_LOG_FIELD, resolveCorrelationId } from '../correlation/correlation-id.js';
 
 /**
  * nestjs-pino settings shared by every service.
@@ -9,6 +9,7 @@ import { resolveCorrelationId } from '../correlation/correlation-id.js';
  *   production they are pretty-printed instead (needs the pino-pretty dev
  *   dependency).
  * - Each log line written while handling a request carries `correlationId`.
+ *   Kafka messages get the same through CorrelationScope.
  * - Level comes from LOG_LEVEL (default `info`; `silent` under tests).
  */
 export function createLoggerParams(serviceName: string): Params {
@@ -25,7 +26,7 @@ export function createLoggerParams(serviceName: string): Params {
       // whole request object. The final "request completed" line still has
       // the request and response.
       quietReqLogger: true,
-      customAttributeKeys: { reqId: 'correlationId' },
+      customAttributeKeys: { reqId: CORRELATION_ID_LOG_FIELD },
       customLogLevel: levelForResponse,
       // Kubernetes probes hit these every few seconds; logging them is noise.
       autoLogging: { ignore: (req) => req.url?.startsWith('/health/') ?? false },
