@@ -1,5 +1,8 @@
 import { type Page, type PageRequest, toPage } from '@app/common';
+import { createEvent, EventType } from '@app/contracts';
+import { currentEventContext, OutboxService } from '@app/messaging';
 import { Inject, Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { ORDER_CURRENCY, STATUS_CHANGE_REASONS } from '../constants.js';
 import { couponRejection, CouponRejection } from '../domain/coupon-rules.js';
 import { DiscountStrategyFactory } from '../domain/discounts/discount-strategy.factory.js';
@@ -17,6 +20,7 @@ import { InvalidCouponException } from '../exceptions/invalid-coupon.exception.j
 import { OrderChangedConcurrentlyException } from '../exceptions/order-changed-concurrently.exception.js';
 import { OrderNotFoundException } from '../exceptions/order-not-found.exception.js';
 import { UnknownProductsException } from '../exceptions/unknown-products.exception.js';
+import { toOrderCreatedPayload } from '../mappers/order-event.mapper.js';
 import { CATALOG_REPOSITORY, type CatalogRepository } from '../repository/catalog.repository.js';
 import { COUPON_REPOSITORY, type CouponRepository } from '../repository/coupon.repository.js';
 import {
@@ -49,7 +53,8 @@ export interface PlacedOrder {
 
 /**
  * Business rules for orders. Knows nothing about HTTP; works with money in
- * paise. Events arrive with the outbox in Week 3.
+ * paise. Events go out through the outbox, in the transaction of the change
+ * they describe.
  */
 @Injectable()
 export class OrdersService {
@@ -59,12 +64,15 @@ export class OrdersService {
     @Inject(COUPON_REPOSITORY) private readonly coupons: CouponRepository,
     private readonly stateMachine: OrderStateMachine,
     private readonly discounts: DiscountStrategyFactory,
+    private readonly outbox: OutboxService,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
    * Places a PENDING order, priced from the local product catalog, with an
-   * optional coupon. Safe to retry: the same Idempotency-Key returns the first
-   * order instead of a new one.
+   * optional coupon, and announces it with OrderCreated so the inventory
+   * service reserves its stock. Safe to retry: the same Idempotency-Key
+   * returns the first order instead of a new one, and announces nothing.
    */
   public async place(request: PlaceOrder): Promise<PlacedOrder> {
     const earlier = await this.orders.findByIdempotencyKey(request.idempotencyKey);
@@ -72,7 +80,21 @@ export class OrdersService {
       return this.replay(earlier, request);
     }
 
-    const saved = await this.orders.insert(await this.buildOrder(request));
+    const order = await this.buildOrder(request);
+    const saved = await this.dataSource.transaction(async (manager) => {
+      const inserted = await this.orders.insert(order, manager);
+      if (inserted) {
+        await this.outbox.add(
+          manager,
+          createEvent(
+            EventType.ORDER_CREATED,
+            toOrderCreatedPayload(inserted),
+            currentEventContext(),
+          ),
+        );
+      }
+      return inserted;
+    });
     if (saved) {
       return { order: saved, replayed: false };
     }

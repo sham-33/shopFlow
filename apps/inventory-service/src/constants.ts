@@ -38,3 +38,11 @@ export const MAX_STOCK_CHANGE = 1_000_000;
 
 /** Swagger description of the `:id` path parameter on product routes. */
 export const PRODUCT_ID_PARAM = { name: 'id', description: 'Product ID', format: 'uuid' } as const;
+
+// Messaging
+
+/** Names under which this service records the events it has handled (processed_events). */
+export const CONSUMER_NAMES = {
+  /** Reserves stock for each OrderCreated. */
+  STOCK_RESERVATION: 'inventory-service.stock-reservation',
+} as const;

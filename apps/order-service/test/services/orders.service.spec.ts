@@ -1,3 +1,7 @@
+import { runWithCorrelationId } from '@app/common';
+import { type AnyEvent, EventType } from '@app/contracts';
+import type { OutboxService } from '@app/messaging';
+import type { DataSource, EntityManager } from 'typeorm';
 import type { Mocked } from 'vitest';
 import { CouponRejection } from '../../src/domain/coupon-rules.js';
 import { DiscountStrategyFactory } from '../../src/domain/discounts/discount-strategy.factory.js';
@@ -46,17 +50,26 @@ function request(overrides: Partial<PlaceOrder> = {}): PlaceOrder {
 }
 
 describe('OrdersService', () => {
+  const manager = { name: 'transaction manager' } as unknown as EntityManager;
   let orders: Mocked<OrderRepository>;
   let catalog: Mocked<CatalogRepository>;
   let coupons: Mocked<CouponRepository>;
+  let addToOutbox: ReturnType<typeof vi.fn<OutboxService['add']>>;
+  let transaction: ReturnType<typeof vi.fn>;
   let service: OrdersService;
+
+  /** The events written to the outbox, in order. */
+  const eventsWritten = (): AnyEvent[] => addToOutbox.mock.calls.map(([, event]) => event);
 
   beforeEach(() => {
     orders = {
       findById: vi.fn<OrderRepository['findById']>(),
       findByIdempotencyKey: vi.fn<OrderRepository['findByIdempotencyKey']>(),
       list: vi.fn<OrderRepository['list']>(),
-      insert: vi.fn<OrderRepository['insert']>((order) => Promise.resolve(order)),
+      // Like the database, gives the new order its ID.
+      insert: vi.fn<OrderRepository['insert']>((order) =>
+        Promise.resolve(Object.assign(order, { id: ORDER_ID })),
+      ),
       changeStatus: vi.fn<OrderRepository['changeStatus']>(),
     };
     catalog = {
@@ -69,12 +82,17 @@ describe('OrdersService', () => {
     };
     orders.findByIdempotencyKey.mockResolvedValue(null);
     catalog.findByIds.mockResolvedValue([aCatalogProduct(), MUG]);
+    addToOutbox = vi.fn<OutboxService['add']>().mockResolvedValue(undefined);
+    // Like DataSource.transaction: runs the callback with a manager and passes on its result or error.
+    transaction = vi.fn((work: (m: EntityManager) => Promise<unknown>) => work(manager));
     service = new OrdersService(
       orders,
       catalog,
       coupons,
       new OrderStateMachine(),
       new DiscountStrategyFactory(),
+      { add: addToOutbox } as unknown as OutboxService,
+      { transaction } as unknown as DataSource,
     );
   });
 
@@ -103,7 +121,7 @@ describe('OrdersService', () => {
         cancelReason: null,
         idempotencyKey: IDEMPOTENCY_KEY,
       });
-      expect(orders.insert).toHaveBeenCalledWith(order);
+      expect(orders.insert).toHaveBeenCalledWith(order, manager);
     });
 
     it('copies each product’s SKU, name and price into the order lines', async () => {
@@ -394,6 +412,76 @@ describe('OrdersService', () => {
 
         await expect(service.place(request())).rejects.toBeInstanceOf(OrderTotalTooLargeException);
       });
+    });
+  });
+
+  describe('events', () => {
+    it('writes OrderCreated for a new order, in the transaction that saves it', async () => {
+      await runWithCorrelationId('c-91ab', () =>
+        service.place(
+          request({
+            items: [
+              { productId: SHIRT_ID, quantity: 2 },
+              { productId: MUG_ID, quantity: 1 },
+            ],
+            paymentMethod: PaymentMethod.CARD,
+          }),
+        ),
+      );
+
+      expect(addToOutbox).toHaveBeenCalledExactlyOnceWith(manager, expect.anything());
+      expect(eventsWritten()[0]).toMatchObject({
+        eventType: EventType.ORDER_CREATED,
+        aggregateId: ORDER_ID,
+        correlationId: 'c-91ab',
+        causationId: null,
+        producer: 'order-service',
+        payload: {
+          orderId: ORDER_ID,
+          customerId: CUSTOMER_ID,
+          items: [
+            { productId: SHIRT_ID, quantity: 2, unitPrice: 499.5 },
+            { productId: MUG_ID, quantity: 1, unitPrice: 199.99 },
+          ],
+          totalAmount: 1198.99,
+          currency: 'INR',
+          paymentMethod: PaymentMethod.CARD,
+        },
+      });
+    });
+
+    it('announces the total after the coupon discount', async () => {
+      coupons.findByCode.mockResolvedValue(aCoupon({ code: 'SAVE10' }));
+
+      await service.place(request({ couponCode: 'SAVE10' }));
+
+      // 2 × ₹499.50 = ₹999, less 10% = ₹899.10
+      expect(eventsWritten()[0]).toMatchObject({ payload: { totalAmount: 899.1 } });
+    });
+
+    it('writes nothing for a repeated Idempotency-Key, because the order was announced the first time', async () => {
+      orders.findByIdempotencyKey.mockResolvedValue(anOrder());
+
+      await service.place(request());
+
+      expect(addToOutbox).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing when a racing retry saved the order first', async () => {
+      orders.insert.mockResolvedValue(null);
+      orders.findByIdempotencyKey.mockResolvedValueOnce(null).mockResolvedValueOnce(anOrder());
+
+      await service.place(request());
+
+      expect(addToOutbox).not.toHaveBeenCalled();
+    });
+
+    it('fails the request if the event cannot be written, so the order is not saved without it', async () => {
+      const failure = new Error('outbox insert failed');
+      addToOutbox.mockRejectedValue(failure);
+
+      await expect(service.place(request())).rejects.toBe(failure);
+      expect(transaction).toHaveBeenCalledOnce();
     });
   });
 

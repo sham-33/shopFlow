@@ -103,6 +103,8 @@ curl -X POST localhost:3001/api/v1/orders \
   -d '{"customerId":"11111111-1111-4111-8111-111111111111","paymentMethod":"WALLET","items":[{"productId":"a1000000-0000-4000-8000-000000000001","quantity":2}]}'
 ```
 
+Placing an order also sends `OrderCreated`. The inventory service then reserves every line of the order or none of them, and answers with `StockReserved` or `StockReservationFailed` (which lists the short items). `GET /api/v1/products/:id` on port 3002 shows the units moving from `available` to `reserved`, and the `stock_reservations` table in `inventory_db` shows which order holds them. The order stays PENDING for now: acting on the answer is the next item in the plan.
+
 ## Database migrations
 
 The schema changes only through TypeORM migrations; `synchronize` is off. Each service's migrations live in `apps/<service>/src/migrations/`.
